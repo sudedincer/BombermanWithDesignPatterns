@@ -13,6 +13,14 @@ namespace Bomberman.Core.Entities
         public int X { get; }
         public int Y { get; }
         public int Power { get; }
+        public float TimeSincePlaced { get; private set; }
+        public float TimeRemaining => Lifetime - TimeSincePlaced;
+        public float Lifetime { get; private set; } = 3f; // 3 saniyede patlar
+
+        public void Update(float delta)
+        {
+            TimeSincePlaced += delta;
+        }
 
         public Bomb(int x, int y, int power)
         {

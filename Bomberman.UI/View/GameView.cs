@@ -158,24 +158,7 @@ namespace Bomberman.UI.View
             }
         }
 
-        // BOMBA ÇİZME
-        private void DrawBombs(List<Bomb> bombs)
-        {
-            foreach (var bomb in bombs)
-            {
-                Vector2 pos = new Vector2(bomb.X * _tileSize, bomb.Y * _tileSize);
-
-                float offset = _tileSize * 0.15f;
-                float size = _tileSize * 0.70f;
-
-                Rectangle dest = new Rectangle(
-                    (int)(pos.X + offset), (int)(pos.Y + offset),
-                    (int)size, (int)size
-                );
-
-                _spriteBatch.Draw(_textureCache["Bomb"], dest, Color.White);
-            }
-        }
+     
 
         // PATLAMA ÇİZME
         private void DrawExplosions()
@@ -213,6 +196,49 @@ namespace Bomberman.UI.View
         public void AddExplosionVisual(int x, int y)
         {
             _explosions.Add((x, y, 0.25f)); // patlama 250ms gözüksün
+        }
+        
+        private void DrawBombs(List<Bomb> bombs)
+        {
+            foreach (var bomb in bombs)
+            {
+                float x = bomb.X * _tileSize + _tileSize / 2f;
+                float y = bomb.Y * _tileSize + _tileSize / 2f;
+
+                float radius = _tileSize * 0.25f;
+
+                // Hafif nabız animasyonu (bomba tıkırdıyor gibi)
+                float pulse = (float)(Math.Sin(bomb.TimeSincePlaced * 6) * 3);
+                radius += pulse;
+
+                // Patlamaya 0.5 saniye kala kırmızı yanıp sönme
+                Color bodyColor = bomb.TimeRemaining < 0.5f && ((int)(bomb.TimeRemaining * 20) % 2 == 0)
+                    ? Color.Red
+                    : Color.Black;
+
+                // Gri outline
+                DrawCircle(x, y, radius + 3, Color.DarkGray);
+
+                // Bomba gövdesi
+                DrawCircle(x, y, radius, bodyColor);
+
+                // Fitil (küçük beyaz kıvılcım)
+                DrawCircle(x + radius * 0.8f, y - radius * 0.8f, radius * 0.25f, Color.Yellow);
+            }
+        }
+        
+        private void DrawCircle(float cx, float cy, float radius, Color color)
+        {
+            int segments = 24;
+            for (int i = 0; i < segments; i++)
+            {
+                float angle1 = MathF.Tau * i / segments;
+                float px = cx + MathF.Cos(angle1) * radius;
+                float py = cy + MathF.Sin(angle1) * radius;
+
+                var rect = new Rectangle((int)px, (int)py, 4, 4);
+                _spriteBatch.Draw(_pixel, rect, color);
+            }
         }
     }
 }
