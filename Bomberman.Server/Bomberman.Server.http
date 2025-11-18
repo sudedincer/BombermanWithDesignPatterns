@@ -1,0 +1,6 @@
+@Bomberman.Server_HostAddress = http://localhost:5077
+
+GET {{Bomberman.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
