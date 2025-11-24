@@ -8,6 +8,7 @@ namespace Bomberman.Core.Entities
     {
         public double X { get; private set; }
         public double Y { get; private set; }
+
         public double Speed { get; } = 0.5;
         public Direction Direction { get; set; } = Direction.Right;
 
@@ -25,16 +26,15 @@ namespace Bomberman.Core.Entities
             _movementStrategy = strategy;
         }
 
-        // Gereksiz null atamalarını engellemek için somut tipleri kullanıyoruz.
-        public void Update(GameMap? map, Player?  targetPlayer) 
+        public void Update(GameMap? map, IPlayer? targetPlayer)
         {
-            // Null uyarılarını kesmek için safe-call kontrolü ekleyebilirsiniz:
-            if (_movementStrategy == null) return;
-            
-            var (deltaX, deltaY) = _movementStrategy.CalculateMovement(this, map, targetPlayer);
+            if (_movementStrategy == null)
+                return;
 
-            X += deltaX;
-            Y += deltaY;
+            var (dx, dy) = _movementStrategy.CalculateMovement(this, map, targetPlayer);
+
+            X += dx;
+            Y += dy;
         }
     }
 }

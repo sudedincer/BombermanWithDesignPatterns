@@ -1,15 +1,25 @@
 using System;
+using System.Collections.Generic;
+using Bomberman.Core.Config;
 using Bomberman.Core.Enums;
 using Bomberman.Core.Patterns.Creational;
+using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
+using Bomberman.Core.PowerUps;
+using System.Collections.Generic;
 
 namespace Bomberman.Core.GameLogic
 {
-    public class GameMap 
+    public class GameMap
     {
         public int Width { get; }
         public int Height { get; }
         public Wall[,] Walls { get; }
+
+        // POWER-UP LİSTESİ
+        public List<PowerUp> PowerUps { get; } = new();
+
+        private readonly PowerUpFactory _powerUpFactory = new PowerUpFactory();
 
         public GameMap(int width, int height, IWallFactory factory)
         {
@@ -18,8 +28,7 @@ namespace Bomberman.Core.GameLogic
             Walls = new Wall[height, width];
 
             var rng = new Random();
-            
-            // HARİTA DOLDURMA MANTIĞI:
+
             // HARİTA DOLDURMA MANTIĞI:
             for (int y = 0; y < height; y++)
             {
@@ -74,11 +83,11 @@ namespace Bomberman.Core.GameLogic
             }
         }
 
-        // Player.Move() ve StaticMovement için çarpışma kontrolü
+        // Player.Move / Enemy hareket için çarpışma kontrolü
         public bool IsWallAt(double x, double y)
         {
-            const double Buffer = 0.15; 
-    
+            const double Buffer = 0.15;
+
             (double tx, double ty)[] testPoints = new[]
             {
                 (x + Buffer, y + Buffer),
@@ -91,16 +100,16 @@ namespace Bomberman.Core.GameLogic
             {
                 int gridX = (int)Math.Round(tx);
                 int gridY = (int)Math.Round(ty);
-        
-                if (IsOutsideBounds(gridX, gridY)) 
+
+                if (IsOutsideBounds(gridX, gridY))
                     return true;
-        
+
                 Wall wall = Walls[gridY, gridX];
-        
-                if (wall != null && !wall.IsDestroyed) 
+
+                if (wall != null && !wall.IsDestroyed)
                     return true;
             }
-    
+
             return false;
         }
 
@@ -108,10 +117,10 @@ namespace Bomberman.Core.GameLogic
         {
             return x < 0 || y < 0 || x >= Width || y >= Height;
         }
-        
+
         public Wall GetWallAt(int x, int y)
         {
-            if (IsOutsideBounds(x, y)) 
+            if (IsOutsideBounds(x, y))
                 return null; // DIŞARIYA ÇIKAN PATLAMA, DUVAR YOK SAYILSIN
 
             return Walls[y, x];
@@ -119,10 +128,26 @@ namespace Bomberman.Core.GameLogic
 
         public void RemoveWall(int x, int y)
         {
-            if (!IsOutsideBounds(x, y))
+            if (IsOutsideBounds(x, y))
+                return;
+
+            Wall wall = Walls[y, x];
+
+            if (wall.CanBeDestroyed())
             {
-                Walls[y, x] = null;
+                wall.IsDestroyed = true;
+
+                if (GameConfig.Instance.Rng.NextDouble() < GameConfig.Instance.PowerUpDropRate)
+                {
+                    var powerUp = PowerUpFactory.CreateRandomPowerUp(x, y);
+                    PowerUps.Add(powerUp);
+                }
             }
+
+            // Duvarı gerçekten sil
+            Walls[y, x] = null;
         }
+        
+    
     }
 }

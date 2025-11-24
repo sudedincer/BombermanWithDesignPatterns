@@ -1,20 +1,21 @@
-namespace Bomberman.Core
-{
-    // Tüm Power-up'ların miras alacağı soyut sınıf (Abstract Decorator)
-    public abstract class PlayerDecorator : IPlayer
-    {
-        protected IPlayer decoratedPlayer;
+using Bomberman.Core.Entities;
+using Bomberman.Core.GameLogic;
 
-        public PlayerDecorator(IPlayer player)
-        {
-            this.decoratedPlayer = player;
-        }
-        
-        // Metotların büyük çoğunluğu sarmalanan nesneye devredilir (Delegation)
-        public virtual int GetMaxBombs() => decoratedPlayer.GetMaxBombs();
-        public virtual int GetBombPower() => decoratedPlayer.GetBombPower();
-        public virtual double GetSpeed() => decoratedPlayer.GetSpeed();
-        public virtual void Move(double x, double y) => decoratedPlayer.Move(x, y);
-        public virtual (double X, double Y) GetPosition() => decoratedPlayer.GetPosition();
+public abstract class PlayerDecorator : IPlayer
+{
+    protected IPlayer inner;
+
+    public PlayerDecorator(IPlayer inner)
+    {
+        this.inner = inner;
     }
+
+    public virtual double GetSpeed() => inner.GetSpeed();
+    public virtual int GetBombPower() => inner.GetBombPower();
+    public virtual int GetMaxBombCount() => inner.GetMaxBombCount();
+    public virtual (double X, double Y) GetPosition() => inner.GetPosition();
+    public bool IsAlive { get => inner.IsAlive; set => inner.IsAlive = value; }
+
+    public void Move(double dx, double dy, GameMap map)
+        => inner.Move(dx, dy, map);
 }

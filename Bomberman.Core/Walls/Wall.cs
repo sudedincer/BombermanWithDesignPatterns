@@ -6,7 +6,7 @@ namespace Bomberman.Core.Walls
     // Temel Duvar (Product)
     public abstract class Wall
     {
-        public bool IsDestroyed { get; protected set; } = false;
+        public bool IsDestroyed { get; set; } = false;
         public abstract bool CanBeDestroyed();
     }
 

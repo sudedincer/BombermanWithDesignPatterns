@@ -1,35 +1,37 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Bomberman.Core.Entities;
 using Bomberman.Core.Walls;
 using Bomberman.Core.GameLogic;
-using System.Collections.Generic;
+using Bomberman.Core.PowerUps;
+
 
 namespace Bomberman.UI.View
 {
     public class GameView
     {
-        private SpriteBatch _spriteBatch;
-        private Texture2D _pixel; // 1x1 beyaz piksel dokusu
-        private int _tileSize = 64; 
-        
-        // Texture cache – performans için şart
-        private Dictionary<string, Texture2D> _textureCache = new Dictionary<string, Texture2D>();
+        private readonly SpriteBatch _spriteBatch;
+        private readonly Texture2D _pixel;
+        private readonly int _tileSize;
+        private Texture2D _powerUpTexture;
+        private readonly Dictionary<string, Texture2D> _textureCache = new();
+        private Rectangle _starRect;
+        private Rectangle _flameRect;
+        private Rectangle _boxRect;
+        private int _iconSize;
+        private readonly List<(int X, int Y, float Timer)> _explosions = new();
 
-        // Patlama görselleri
-        private List<(int X, int Y, float Timer)> _explosions = new List<(int X, int Y, float Timer)>();
 
         public GameView(SpriteBatch spriteBatch, GraphicsDevice graphicsDevice, int tileSize = 64)
         {
             _spriteBatch = spriteBatch;
             _tileSize = tileSize;
-            
-            // Pixel dokusu (çizgiler, bombalar, ateş için)
+
             _pixel = new Texture2D(graphicsDevice, 1, 1);
             _pixel.SetData(new[] { Color.White });
 
-            // Varsayılan dokular cache’e ekleniyor
             CacheTexture("Unbreakable", CreateSolid(graphicsDevice, Color.Gray));
             CacheTexture("Breakable", CreateSolid(graphicsDevice, Color.Red));
             CacheTexture("HardFull", CreateSolid(graphicsDevice, Color.LimeGreen));
@@ -54,15 +56,17 @@ namespace Bomberman.UI.View
             return texture;
         }
 
-        public void DrawGame(GameMap map, List<Player> players, List<Bomb> bombs)
+        public void DrawGame(GameMap map, IPlayer player, List<Bomb> bombs)
         {
             _spriteBatch.Begin();
 
             DrawWalls(map.Walls);
+            DrawPowerUps(map.PowerUps);
             DrawGridLines(map.Width, map.Height);
             DrawBombs(bombs);
             DrawExplosions();
-            DrawPlayers(players);
+            
+            DrawPlayer(player);
 
             _spriteBatch.End();
         }
@@ -94,7 +98,6 @@ namespace Bomberman.UI.View
                 0);
         }
 
-        // DUVARLARI ÇİZME
         private void DrawWalls(Wall[,] walls)
         {
             int rows = walls.GetLength(0);
@@ -115,7 +118,6 @@ namespace Bomberman.UI.View
             }
         }
 
-        // DAMAGE FEEDBACK DESTEKLİ WALL TEXTURE SEÇİMİ
         private Texture2D GetWallTexture(Wall wall)
         {
             if (wall is UnbreakableWall)
@@ -126,7 +128,8 @@ namespace Bomberman.UI.View
 
             if (wall is HardWall hw)
             {
-                if (hw.HitsRemaining == 2)
+                // Hard wall damage feedback
+                if (hw.HitsRemaining >= 2)
                     return _textureCache["HardFull"];
 
                 if (hw.HitsRemaining == 1)
@@ -136,32 +139,54 @@ namespace Bomberman.UI.View
             return _textureCache["Unbreakable"];
         }
 
-        // OYUNCU ÇİZME
-        private void DrawPlayers(List<Player> players)
+        private void DrawPlayer(IPlayer player)
         {
-            foreach (var player in players)
-            {
-                Vector2 pos = new Vector2(
-                    (float)player.GetPosition().X * _tileSize,
-                    (float)player.GetPosition().Y * _tileSize
-                );
+            var pos = player.GetPosition();
 
-                float offset = _tileSize * 0.15f;
-                float size = _tileSize * 0.70f;
+            Vector2 screenPos = new Vector2(
+                (float)pos.X * _tileSize,
+                (float)pos.Y * _tileSize
+            );
 
-                Rectangle dest = new Rectangle(
-                    (int)(pos.X + offset), (int)(pos.Y + offset),
-                    (int)size, (int)size
-                );
+            float offset = _tileSize * 0.15f;
+            float size = _tileSize * 0.70f;
 
-                _spriteBatch.Draw(_textureCache["Player"], dest, Color.White);
-            }
+            Rectangle dest = new Rectangle(
+                (int)(screenPos.X + offset),
+                (int)(screenPos.Y + offset),
+                (int)size,
+                (int)size
+            );
+
+            _spriteBatch.Draw(_textureCache["Player"], dest, Color.White);
         }
 
-     
+        private void DrawPowerUps(List<PowerUp> powerUps)
+        {
+            foreach (var pu in powerUps)
+            {
+                if (pu.Collected)
+                    continue;
 
-        // PATLAMA ÇİZME
-        private void DrawExplosions()
+                Vector2 pos = new Vector2(pu.X * _tileSize, pu.Y * _tileSize);
+
+                Rectangle dest = new Rectangle(
+                    (int)pos.X + 4,
+                    (int)pos.Y + 4,
+                    _tileSize - 8,
+                    _tileSize - 8);
+
+                Rectangle sourceRect = pu switch
+                {
+                    SpeedPowerUp => _starRect,
+                    BombPowerUp => _flameRect,
+                    ExtraBombPowerUp => _boxRect,
+                    _ => _starRect
+                };
+
+                _spriteBatch.Draw(_powerUpTexture, dest, sourceRect, Color.White);
+            }
+        }        private void DrawExplosions()
         {
             foreach (var exp in _explosions)
             {
@@ -176,7 +201,6 @@ namespace Bomberman.UI.View
             }
         }
 
-        // PATLAMA ZAMANLAYICI GÜNCELLEME
         public void Update(GameTime gameTime)
         {
             float delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -197,7 +221,7 @@ namespace Bomberman.UI.View
         {
             _explosions.Add((x, y, 0.25f)); // patlama 250ms gözüksün
         }
-        
+
         private void DrawBombs(List<Bomb> bombs)
         {
             foreach (var bomb in bombs)
@@ -207,26 +231,19 @@ namespace Bomberman.UI.View
 
                 float radius = _tileSize * 0.25f;
 
-                // Hafif nabız animasyonu (bomba tıkırdıyor gibi)
                 float pulse = (float)(Math.Sin(bomb.TimeSincePlaced * 6) * 3);
                 radius += pulse;
 
-                // Patlamaya 0.5 saniye kala kırmızı yanıp sönme
                 Color bodyColor = bomb.TimeRemaining < 0.5f && ((int)(bomb.TimeRemaining * 20) % 2 == 0)
                     ? Color.Red
                     : Color.Black;
 
-                // Gri outline
                 DrawCircle(x, y, radius + 3, Color.DarkGray);
-
-                // Bomba gövdesi
                 DrawCircle(x, y, radius, bodyColor);
-
-                // Fitil (küçük beyaz kıvılcım)
                 DrawCircle(x + radius * 0.8f, y - radius * 0.8f, radius * 0.25f, Color.Yellow);
             }
         }
-        
+
         private void DrawCircle(float cx, float cy, float radius, Color color)
         {
             int segments = 24;
@@ -239,6 +256,18 @@ namespace Bomberman.UI.View
                 var rect = new Rectangle((int)px, (int)py, 4, 4);
                 _spriteBatch.Draw(_pixel, rect, color);
             }
+        }
+        
+        public void SetPowerUpTexture(Texture2D texture)
+        {
+            _powerUpTexture = texture;
+
+            int iconWidth = _powerUpTexture.Width / 3;   // 1536 / 3 = 512
+            int iconHeight = _powerUpTexture.Height;     // 1024
+
+            _starRect  = new Rectangle(0 * iconWidth, 0, iconWidth, iconHeight);
+            _flameRect = new Rectangle(1 * iconWidth, 0, iconWidth, iconHeight);
+            _boxRect   = new Rectangle(2 * iconWidth, 0, iconWidth, iconHeight);
         }
     }
 }

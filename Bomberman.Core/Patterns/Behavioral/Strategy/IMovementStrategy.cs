@@ -5,7 +5,10 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
 {
     public interface IMovementStrategy
     {
-        // Gereksiz object tiplerini GameMap ve Player'a çevirdik.
-        (double DeltaX, double DeltaY) CalculateMovement(Enemy enemy, GameMap? map, Player? targetPlayer);
+        (double DeltaX, double DeltaY) CalculateMovement(
+            Enemy enemy,
+            GameMap? map,
+            IPlayer? targetPlayer
+        );
     }
 }
