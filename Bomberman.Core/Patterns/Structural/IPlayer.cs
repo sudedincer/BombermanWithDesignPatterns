@@ -1,8 +1,9 @@
 using Bomberman.Core.GameLogic;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 
 namespace Bomberman.Core.Entities
 {
-    public interface IPlayer
+    public interface IPlayer : IExplosionObserver
     {
         // KONUM
         (double X, double Y) GetPosition();

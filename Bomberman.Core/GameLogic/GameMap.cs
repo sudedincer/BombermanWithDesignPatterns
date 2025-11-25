@@ -8,11 +8,12 @@ using Bomberman.Core.Walls;
 using Bomberman.Core.PowerUps;
 using System.Collections.Generic;
 using Bomberman.Core.Entities;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 using Bomberman.Core.Patterns.Behavioral.Strategy;
 
 namespace Bomberman.Core.GameLogic
 {
-    public class GameMap
+    public class GameMap : IExplosionObserver
     {
         public int Width { get; }
         public int Height { get; }
@@ -144,6 +145,12 @@ namespace Bomberman.Core.GameLogic
 
             Wall wall = Walls[y, x];
 
+            if (wall == null)
+            {
+                // Zaten duvar yok → sorun yok
+                return;
+            }
+
             if (wall.CanBeDestroyed())
             {
                 wall.IsDestroyed = true;
@@ -155,10 +162,33 @@ namespace Bomberman.Core.GameLogic
                 }
             }
 
-            // Duvarı gerçekten sil
             Walls[y, x] = null;
         }
-        
-    
+
+        public void OnExplosion(int x, int y, int power)
+        {
+            if (IsOutsideBounds(x, y))
+                return;
+
+            var wall = Walls[y, x];
+
+            if (wall == null)
+                return;
+
+            if (!wall.CanBeDestroyed())
+                return;
+
+            // Duvar kırıldı
+            wall.IsDestroyed = true;
+            Walls[y, x] = null;
+
+            // 🎯 POWER-UP SPAWN 
+            if (GameConfig.Instance.Rng.NextDouble() < GameConfig.Instance.PowerUpDropRate)
+            {
+                var pu = PowerUpFactory.CreateRandomPowerUp(x, y);
+                PowerUps.Add(pu);
+                Console.WriteLine($"[DEBUG] Power-Up spawned at {x},{y}");
+            }
+        }
     }
 }

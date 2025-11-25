@@ -16,6 +16,7 @@ namespace Bomberman.Core.Entities
         public float TimeSincePlaced { get; private set; }
         public float TimeRemaining => Lifetime - TimeSincePlaced;
         public float Lifetime { get; private set; } = 3f; // 3 saniyede patlar
+        public bool IsExploded { get; set; } = false;
 
         public void Update(float delta)
         {
@@ -35,6 +36,8 @@ namespace Bomberman.Core.Entities
             _observers.Add(observer);
         }
 
+
+       
         public void Detach(IExplosionObserver observer)
         {
             // Abonelikten çıkar
@@ -53,39 +56,33 @@ namespace Bomberman.Core.Entities
         // Bu metot, oyun döngüsünde zamanlayıcı bittiğinde çağrılır.
         public void Explode(GameMap map)
         {
-            // Merkezi bildir (Patlama başladığı yer)
+            IsExploded = true;
+
+            // merkezi bildir
             Notify(Power);
 
-            // 4 ana yönde patlamayı yay (Observer)
-            int[] dx = { 1, -1, 0, 0 }; // Sağ, Sol
-            int[] dy = { 0, 0, 1, -1 }; // Aşağı, Yukarı
+            int[] dx = { 1, -1, 0, 0 };
+            int[] dy = { 0, 0, 1, -1 };
 
             for (int i = 0; i < 4; i++)
             {
-                for (int r = 1; r <= Power; r++) // Patlama menzili (Power) kadar yay
+                for (int r = 1; r <= Power; r++)
                 {
                     int currentX = X + dx[i] * r;
                     int currentY = Y + dy[i] * r;
 
-                    // Harita sınırlarını ve duvar tipini kontrol et
-                    if (map.IsOutsideBounds(currentX, currentY)) break;
-
-                    Walls.Wall wall = map.GetWallAt(currentX, currentY);
-
-                    if (wall is Walls.UnbreakableWall)
-                    {
-                        // Kırılamaz duvara çarptı, yayılım durur.
+                    if (map.IsOutsideBounds(currentX, currentY))
                         break;
-                    }
-                    else if (wall is Walls.BreakableWall || wall is Walls.HardWall)
-                    {
-                        // Kırılabilir/Sert duvara çarptı. Sadece o kareyi etkile ve yayılımı durdur.
-                        NotifySingle(currentX, currentY, Power); // Tek bir kareyi bildir
-                        break;
-                    }
 
-                    // Boş kare ise (yol) sadece kareyi bildir
+                    var wall = map.GetWallAt(currentX, currentY);
+
+                    if (wall is UnbreakableWall)
+                        break;
+
                     NotifySingle(currentX, currentY, Power);
+
+                    if (wall is BreakableWall || wall is HardWall)
+                        break;
                 }
             }
         }

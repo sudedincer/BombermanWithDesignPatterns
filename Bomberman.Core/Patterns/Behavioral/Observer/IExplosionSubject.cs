@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Bomberman.Core.Entities;
 
 namespace Bomberman.Core.Patterns.Behavioral.Observer
 {

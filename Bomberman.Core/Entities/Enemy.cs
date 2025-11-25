@@ -1,10 +1,11 @@
 using Bomberman.Core.Enums;
 using Bomberman.Core.Patterns.Behavioral.Strategy;
 using Bomberman.Core.GameLogic;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 
 namespace Bomberman.Core.Entities
 {
-    public class Enemy
+    public class Enemy :IExplosionObserver
     {
         public double X { get; private set; }
         public double Y { get; private set; }
@@ -39,6 +40,21 @@ namespace Bomberman.Core.Entities
 
             X += dx;
             Y += dy;
+        }
+
+        public void OnExplosion(int x, int y, int power)
+        {
+            if (!IsAlive)
+                return;
+
+            int ex = (int)Math.Round(X);
+            int ey = (int)Math.Round(Y);
+
+            if (ex == x && ey == y)
+            {
+                IsAlive = false;
+                Console.WriteLine("Enemy Killed by explosion");
+            }
         }
     }
 }

@@ -18,4 +18,8 @@ public abstract class PlayerDecorator : IPlayer
 
     public void Move(double dx, double dy, GameMap map)
         => inner.Move(dx, dy, map);
+    public virtual void OnExplosion(int x, int y, int power)
+    {
+        inner.OnExplosion(x, y, power);
+    }
 }

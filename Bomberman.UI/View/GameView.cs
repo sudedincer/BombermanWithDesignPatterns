@@ -5,12 +5,13 @@ using Microsoft.Xna.Framework.Graphics;
 using Bomberman.Core.Entities;
 using Bomberman.Core.Walls;
 using Bomberman.Core.GameLogic;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 using Bomberman.Core.PowerUps;
 
 
 namespace Bomberman.UI.View
 {
-    public class GameView
+    public class GameView : IExplosionObserver
     {
         private readonly SpriteBatch _spriteBatch;
         private readonly Texture2D _pixel;
@@ -24,6 +25,7 @@ namespace Bomberman.UI.View
         private readonly List<(int X, int Y, float Timer)> _explosions = new();
         private Texture2D _enemyTexture;
         private Texture2D _playerTexture;
+        private Texture2D _bombTexture;
 
         public GameView(SpriteBatch spriteBatch, GraphicsDevice graphicsDevice, int tileSize = 64)
         {
@@ -228,23 +230,46 @@ namespace Bomberman.UI.View
 
         private void DrawBombs(List<Bomb> bombs)
         {
+            bombs.RemoveAll(b => b.IsExploded);
             foreach (var bomb in bombs)
             {
-                float x = bomb.X * _tileSize + _tileSize / 2f;
-                float y = bomb.Y * _tileSize + _tileSize / 2f;
+                if (bomb.IsExploded)
+                {
+                    continue;
+                }
 
-                float radius = _tileSize * 0.25f;
+                if (_bombTexture == null)
+                    continue;
 
-                float pulse = (float)(Math.Sin(bomb.TimeSincePlaced * 6) * 3);
-                radius += pulse;
+                Vector2 pos = new Vector2(
+                    bomb.X * _tileSize,
+                    bomb.Y * _tileSize
+                );
 
-                Color bodyColor = bomb.TimeRemaining < 0.5f && ((int)(bomb.TimeRemaining * 20) % 2 == 0)
-                    ? Color.Red
-                    : Color.Black;
+                // **Pulsing efekt**
+                float t = bomb.TimeRemaining;
+                float pulse =
+                    t < 0.5f
+                        ? 1.0f + (float)Math.Sin(t * 25) * 0.15f // hızlı yanıp sönme
+                        : 1.0f + (float)Math.Sin(t * 10) * 0.05f; // hafif pulse
 
-                DrawCircle(x, y, radius + 3, Color.DarkGray);
-                DrawCircle(x, y, radius, bodyColor);
-                DrawCircle(x + radius * 0.8f, y - radius * 0.8f, radius * 0.25f, Color.Yellow);
+                int size = (int)(_tileSize * 0.75f * pulse);
+                int offset = (_tileSize - size) / 2;
+
+                Rectangle dest = new Rectangle(
+                    (int)pos.X + offset,
+                    (int)pos.Y + offset,
+                    size,
+                    size
+                );
+
+                // **Kırmızı flash**
+                Color flashColor =
+                    t < 0.5f && ((int)(t * 20) % 2 == 0)
+                        ? Color.OrangeRed
+                        : Color.White;
+
+                _spriteBatch.Draw(_bombTexture, dest, flashColor);
             }
         }
 
@@ -300,6 +325,15 @@ namespace Bomberman.UI.View
         public void SetPlayerTexture(Texture2D tex)
         {
             _playerTexture = tex;
+        }
+        public void SetBombTexture(Texture2D tex)
+        {
+            _bombTexture = tex;
+        }
+
+        public void OnExplosion(int x, int y, int power)
+        {
+            AddExplosionVisual(x, y);
         }
     }
 }
