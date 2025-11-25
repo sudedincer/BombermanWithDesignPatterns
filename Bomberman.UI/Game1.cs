@@ -46,9 +46,12 @@ namespace Bomberman.UI
         private const string HUB_URL = "http://localhost:5077/gamehub";
 
         private Texture2D _powerUpTexture;
+        private Texture2D _enemyTexture;
+        int tileSize = 64;
+        private Texture2D _playerTexture;
         public Game1()
         {
-            int tileSize = 64;
+            
 
             _graphics = new GraphicsDeviceManager(this);
             _graphics.PreferredBackBufferWidth = _mapWidth * tileSize;
@@ -85,6 +88,10 @@ namespace Bomberman.UI
             _overlayPixel.SetData(new[] { Color.White });
             _powerUpTexture = Content.Load<Texture2D>("Textures/powerups");
             _gameView.SetPowerUpTexture(_powerUpTexture);
+            _enemyTexture = Content.Load<Texture2D>("enemy");
+            _gameView.SetEnemyTexture(_enemyTexture);
+            _playerTexture = Content.Load<Texture2D>("player");
+            _gameView.SetPlayerTexture(_playerTexture);
         }
 
         private void HandleExplosion(int x, int y, int power)
@@ -142,6 +149,7 @@ namespace Bomberman.UI
                 {
                     _player.Move(moveX, moveY, _gameMap);
                     CheckPowerUpPickup();
+                    CheckPlayerEnemyCollision();
                 }
 
                 var newPos = _player.GetPosition();
@@ -162,6 +170,11 @@ namespace Bomberman.UI
             {
                 bomb.Update(dt);
             }
+            // Enemy movement update
+            foreach (var enemy in _gameMap.Enemies)
+            {
+                enemy.Update(_gameMap, _player);
+            }
 
             // Bomba koyma (Space, tek tuş basışı)
             if (currentKeyboardState.IsKeyDown(Keys.Space) &&
@@ -181,6 +194,8 @@ namespace Bomberman.UI
                     Y = bombY,
                     Power = power
                 };
+                
+               
 
                 Task.Run(() => _gameClient.PlaceBombAsync(bombDto));
 
@@ -217,24 +232,23 @@ namespace Bomberman.UI
 
         private void ProcessExplosion(int x, int y, int power)
         {
-            Console.WriteLine($"[CLIENT DEBUG] ProcessExplosion Başlatıldı: ({x}, {y}), power={power}");
-
+            // Bombayı kaldır
             var bombToRemove = _bombs.FirstOrDefault(b =>
                 (int)Math.Round((decimal)b.X) == x &&
                 (int)Math.Round((decimal)b.Y) == y);
 
             if (bombToRemove != null)
-            {
                 _bombs.Remove(bombToRemove);
-                Console.WriteLine($"[DEBUG] Bomba ({x}, {y}) listeden kaldırıldı.");
-            }
 
-            // Merkez hücre
+            // Merkez hücreye patlama uygula
             ApplyExplosionToCell(x, y);
 
-            // Dört yöne doğru patlama yayılımı
+            // Dört yöne yayılım
             int[] dx = { 1, -1, 0, 0 };
             int[] dy = { 0, 0, 1, -1 };
+
+            // Önce merkezde enemy öldür
+            KillEnemiesAt(x, y);
 
             for (int dir = 0; dir < 4; dir++)
             {
@@ -246,12 +260,15 @@ namespace Bomberman.UI
                     cx += dx[dir];
                     cy += dy[dir];
 
+                    // Bu tile'a patlama uygula
                     if (!ApplyExplosionToCell(cx, cy))
                         break;
+
+                    // ❗ DOĞRU: enemy öldürme TAM BURADA yapılmalı
+                    KillEnemiesAt(cx, cy);
                 }
             }
         }
-
         /// <summary>
         /// Verilen grid hücresine patlama uygular.
         /// Görsel ekler, duvarları yıkar, oyuncuyu öldürür.
@@ -494,27 +511,43 @@ namespace Bomberman.UI
             }
         }
         
-        private void CheckPowerUpCollection()
+        private void CheckPlayerEnemyCollision()
         {
-            int px = (int)Math.Round(_player.GetPosition().X);
-            int py = (int)Math.Round(_player.GetPosition().Y);
-
-            // Haritadaki power-up'lar üzerinde kontrol
-            for (int i = _gameMap.PowerUps.Count - 1; i >= 0; i--)
+            foreach (var enemy in _gameMap.Enemies)
             {
-                var pu = _gameMap.PowerUps[i];
+                // Tile bazlı çarpışma
+                int ex = (int)Math.Round(enemy.X);
+                int ey = (int)Math.Round(enemy.Y);
 
-                if (pu.X == px && pu.Y == py)
+                var pos = _player.GetPosition();
+                int px = (int)Math.Round(pos.X);
+                int py = (int)Math.Round(pos.Y);
+
+                if (px == ex && py == ey)
                 {
-                    Console.WriteLine($"[POWERUP] Player collected {pu.GetType().Name}");
-
-                    // Decorator ile oyuncuya buff ekle
-                    _player = pu.Apply(_player);
-
-                    // PowerUp haritadan sil
-                    _gameMap.PowerUps.RemoveAt(i);
+                    _isPlayerAlive = false;
+                    return;
                 }
             }
         }
+        
+        private void KillEnemiesAt(int x, int y)
+        {
+            var dead = _gameMap.Enemies
+                .Where(e => (int)Math.Round(e.X) == x &&
+                            (int)Math.Round(e.Y) == y)
+                .ToList();
+
+            foreach (var e in dead)
+                _gameMap.Enemies.Remove(e);
+        }
+        
+        public void SetPlayerTexture(Texture2D tex)
+        {
+            _playerTexture = tex;
+        }
+        
+       
     }
+    
 }

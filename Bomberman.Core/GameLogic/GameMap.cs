@@ -7,6 +7,8 @@ using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
 using Bomberman.Core.PowerUps;
 using System.Collections.Generic;
+using Bomberman.Core.Entities;
+using Bomberman.Core.Patterns.Behavioral.Strategy;
 
 namespace Bomberman.Core.GameLogic
 {
@@ -20,14 +22,23 @@ namespace Bomberman.Core.GameLogic
         public List<PowerUp> PowerUps { get; } = new();
 
         private readonly PowerUpFactory _powerUpFactory = new PowerUpFactory();
-
+        public List<Enemy> Enemies = new List<Enemy>();
         public GameMap(int width, int height, IWallFactory factory)
         {
+            var rng = new Random();
             Width = width;
             Height = height;
             Walls = new Wall[height, width];
+            int ex = 0, ey = 0;
+            do
+            {
+                ex = rng.Next(1, width-1);
+                ey = rng.Next(1, height-1);
+            }
+            while (Walls[ey, ex] != null);  // boş tile bulana kadar
 
-            var rng = new Random();
+            Enemies.Add(new Enemy(3, 3, new RandomWalkMovement()));            
+            
 
             // HARİTA DOLDURMA MANTIĞI:
             for (int y = 0; y < height; y++)

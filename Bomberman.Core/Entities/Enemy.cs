@@ -8,8 +8,9 @@ namespace Bomberman.Core.Entities
     {
         public double X { get; private set; }
         public double Y { get; private set; }
+        public bool IsAlive { get; set; } = true;
 
-        public double Speed { get; } = 0.5;
+        public double Speed { get; set; } = 0.5;
         public Direction Direction { get; set; } = Direction.Right;
 
         private IMovementStrategy? _movementStrategy;
@@ -18,7 +19,10 @@ namespace Bomberman.Core.Entities
         {
             X = x;
             Y = y;
+
             SetMovementStrategy(strategy);
+
+            
         }
 
         public void SetMovementStrategy(IMovementStrategy strategy)
@@ -26,7 +30,7 @@ namespace Bomberman.Core.Entities
             _movementStrategy = strategy;
         }
 
-        public void Update(GameMap? map, IPlayer? targetPlayer)
+        public void Update(GameMap map, IPlayer targetPlayer)
         {
             if (_movementStrategy == null)
                 return;

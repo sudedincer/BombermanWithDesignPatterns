@@ -22,7 +22,8 @@ namespace Bomberman.UI.View
         private Rectangle _boxRect;
         private int _iconSize;
         private readonly List<(int X, int Y, float Timer)> _explosions = new();
-
+        private Texture2D _enemyTexture;
+        private Texture2D _playerTexture;
 
         public GameView(SpriteBatch spriteBatch, GraphicsDevice graphicsDevice, int tileSize = 64)
         {
@@ -65,7 +66,7 @@ namespace Bomberman.UI.View
             DrawGridLines(map.Width, map.Height);
             DrawBombs(bombs);
             DrawExplosions();
-            
+            DrawEnemies(map.Enemies);
             DrawPlayer(player);
 
             _spriteBatch.End();
@@ -141,6 +142,9 @@ namespace Bomberman.UI.View
 
         private void DrawPlayer(IPlayer player)
         {
+            if (_playerTexture == null)
+                return;
+
             var pos = player.GetPosition();
 
             Vector2 screenPos = new Vector2(
@@ -148,8 +152,9 @@ namespace Bomberman.UI.View
                 (float)pos.Y * _tileSize
             );
 
-            float offset = _tileSize * 0.15f;
-            float size = _tileSize * 0.70f;
+            // Sprite'ı kare içine biraz küçültmek için offset/scale
+            float offset = _tileSize * 0.05f;   // kenarlardan 15%
+            float size = _tileSize * 0.90f;     // tile'ın %70'i kadar
 
             Rectangle dest = new Rectangle(
                 (int)(screenPos.X + offset),
@@ -158,9 +163,8 @@ namespace Bomberman.UI.View
                 (int)size
             );
 
-            _spriteBatch.Draw(_textureCache["Player"], dest, Color.White);
+            _spriteBatch.Draw(_playerTexture, dest, Color.White);
         }
-
         private void DrawPowerUps(List<PowerUp> powerUps)
         {
             foreach (var pu in powerUps)
@@ -268,6 +272,34 @@ namespace Bomberman.UI.View
             _starRect  = new Rectangle(0 * iconWidth, 0, iconWidth, iconHeight);
             _flameRect = new Rectangle(1 * iconWidth, 0, iconWidth, iconHeight);
             _boxRect   = new Rectangle(2 * iconWidth, 0, iconWidth, iconHeight);
+        }
+        
+        public void DrawEnemies(List<Enemy> enemies)
+        {
+            foreach (var e in enemies)
+            {
+                if (!e.IsAlive)
+                    continue;
+
+                if (_enemyTexture == null)
+                    continue;
+
+                int px = (int)(e.X * _tileSize);
+                int py = (int)(e.Y * _tileSize);
+
+                Rectangle dest = new Rectangle(px, py, _tileSize, _tileSize);
+
+                _spriteBatch.Draw(_enemyTexture, dest, Color.White);
+            }
+        }
+        public void SetEnemyTexture(Texture2D tex)
+        {
+            _enemyTexture = tex;
+        }
+
+        public void SetPlayerTexture(Texture2D tex)
+        {
+            _playerTexture = tex;
         }
     }
 }

@@ -9,6 +9,7 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+      <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.4.1" />
     </ItemGroup>
 
     <ItemGroup>
