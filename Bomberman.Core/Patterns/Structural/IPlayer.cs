@@ -19,7 +19,7 @@ namespace Bomberman.Core.Entities
 
         // AYNI ANDA KAÇ BOMBA BIRAKABİLİR?
         int GetMaxBombCount();
-
+        void Update(double dt);
         // HAREKET
         void Move(double dx, double dy, GameMap map);
     }

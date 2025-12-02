@@ -8,6 +8,8 @@ namespace Bomberman.Core.PowerUps
         public int X { get; }
         public int Y { get; }
         public bool Collected { get; set; }
+        public float Duration { get; protected set; } = 10f; // 10 saniye
+
 
         protected PowerUp(int x, int y)
         {

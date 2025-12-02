@@ -174,17 +174,45 @@ namespace Bomberman.UI
             {
                 bomb.Update(dt);
             }
-            // Enemy movement update
+
+// Enemy movement update
             foreach (var enemy in _gameMap.Enemies)
             {
                 enemy.Update(_gameMap, _player);
+            }
+
+// 🔥 POWER-UP SÜRE KONTROLÜ (Doğru konum burası)
+            if (_player is TimedPlayerDecorator timed)
+            {
+                timed.Update(dt);
+
+                if (timed.IsExpired)
+                {
+                    timed.RevertEffect();
+                    _player = timed.InnerPlayer;
+                }
+            }
+            else
+            {
+                _player.Update(dt);
             }
 
             // Bomba koyma (Space, tek tuş basışı)
             if (currentKeyboardState.IsKeyDown(Keys.Space) &&
                 !_previousKeyboardState.IsKeyDown(Keys.Space))
             {
-                
+                // 🔥 ŞU AN AKTİF OLAN BOMBALARI SAY
+                int activeBombs = _bombs.Count(b => !b.IsExploded);
+
+                int maxBombs = _player.GetMaxBombCount();
+                Console.WriteLine($"[DEBUG] ActiveBombs = {activeBombs}, MaxBombs = {maxBombs}");
+
+                if (activeBombs >= maxBombs)
+                {
+                    // Limit dolu → bomba koyma
+                    return;
+                }
+
                 var pos = _player.GetPosition();
 
                 int bombX = (int)Math.Round(pos.X);
@@ -199,6 +227,7 @@ namespace Bomberman.UI
                     Y = bombY,
                     Power = power
                 };
+
                 var bomb = new Bomb(bombX, bombY, power);
 
                 bomb.Attach(_player);
@@ -209,11 +238,8 @@ namespace Bomberman.UI
                     bomb.Attach(enemy);
 
                 _bombs.Add(bomb);
-               
 
                 Task.Run(() => _gameClient.PlaceBombAsync(bombDto));
-
-                
             }
 
             // Power-up toplama
@@ -244,25 +270,24 @@ namespace Bomberman.UI
             }
         }
 
-      /*  private void ProcessExplosion(int x, int y, int power)
+    
+      
+        private void ProcessExplosion(int x, int y, int power)
         {
-            // Bombayı kaldır
-            var bombToRemove = _bombs.FirstOrDefault(b =>
-                (int)Math.Round((decimal)b.X) == x &&
-                (int)Math.Round((decimal)b.Y) == y);
+            // Bombayı bul
+            var bomb = _bombs.FirstOrDefault(b => b.X == x && b.Y == y);
+            if (bomb != null)
+            {
+                bomb.IsExploded = true;   // 🔥 sadece patlamış olarak işaretle
+                Console.WriteLine("[DEBUG] Bomb exploded at " + x + "," + y);
+            }
 
-            if (bombToRemove != null)
-                _bombs.Remove(bombToRemove);
-
-            // Merkez hücreye patlama uygula
+            // Merkez hücre
             ApplyExplosionToCell(x, y);
 
-            // Dört yöne yayılım
+            // 4 yön
             int[] dx = { 1, -1, 0, 0 };
             int[] dy = { 0, 0, 1, -1 };
-
-            // Önce merkezde enemy öldür
-            KillEnemiesAt(x, y);
 
             for (int dir = 0; dir < 4; dir++)
             {
@@ -274,85 +299,61 @@ namespace Bomberman.UI
                     cx += dx[dir];
                     cy += dy[dir];
 
-                    // Bu tile'a patlama uygula
                     if (!ApplyExplosionToCell(cx, cy))
                         break;
-
-                    // ❗ DOĞRU: enemy öldürme TAM BURADA yapılmalı
-                    KillEnemiesAt(cx, cy);
                 }
             }
-        }*/
-      
-      private void ProcessExplosion(int x, int y, int power)
+        }
+        /// <summary>
+      /// Bir hücreye patlama uygular.
+      /// false dönerse patlama o yönde durur.
+      /// </summary>
+      private bool ApplyExplosionToCell(int x, int y)
       {
-          var bomb = _bombs.FirstOrDefault(b =>
-              (int)Math.Round((decimal)b.X) == x &&
-              (int)Math.Round((decimal)b.Y) == y);
-
-          if (bomb == null)
-              return;
-
-          bomb.IsExploded = true;
-          bomb.Explode(_gameMap);
-          _bombs.Remove(bomb);
-
-          // Merkez hücreye etki
-          HandleExplosionOnCell(x, y);
-
-          // Patlamanın yayılacağı 4 yön
-          int[] dx = { 1, -1, 0, 0 };
-          int[] dy = { 0, 0, 1, -1 };
-
-          for (int dir = 0; dir < 4; dir++)
-          {
-              int cx = x;
-              int cy = y;
-
-              for (int i = 1; i <= power; i++)
-              {
-                  cx += dx[dir];
-                  cy += dy[dir];
-
-                  // Hücreyi işliyoruz
-                  if (!HandleExplosionOnCell(cx, cy))
-                      break; // duvara veya limite çarptı
-              }
-          }
-      }
-      private bool HandleExplosionOnCell(int x, int y)
-      {
-          // sınır dışıysa devam etmeyi bırak
+          // Harita dışında → devam etmesin
           if (_gameMap.IsOutsideBounds(x, y))
               return false;
 
-          // explosion görseli
+          // Patlama efekti göster
           _gameView.AddExplosionVisual(x, y);
 
-          // player öldür
+          // Oyuncuları öldür
           KillPlayerAt(x, y);
+        //  KillRemotePlayerAt(x, y);
 
-          // enemy öldür
+          // Enemy öldür
           KillEnemiesAt(x, y);
 
-          // duvar kontrol et
+          // Duvar kontrolü
           var wall = _gameMap.GetWallAt(x, y);
-          if (wall != null && !wall.IsDestroyed)
-          {
-              // kırılabilir veya hard wall ise yık
-              if (wall is BreakableWall || wall is HardWall)
-              {
-                  _gameMap.RemoveWall(x, y);
-              }
 
-              // unbreakable ise → patlama durur
+          if (wall == null)
+              return true; // Boş → devam et
+
+          // Kırılamaz
+          if (wall is UnbreakableWall)
+              return false;
+
+          // Breakable
+          if (wall is BreakableWall)
+          {
+              _gameMap.RemoveWall(x, y);
               return false;
           }
 
-          // boşsa → patlama devam eder
-          return true;
-      }
+          // Hard wall (çok vuruşluk)
+          if (wall is HardWall hw)
+          {
+              hw.OnExplosion(x, y, 1);
 
+              if (hw.IsDestroyed)
+                  _gameMap.RemoveWall(x, y);
+
+              return false;
+          }
+
+          return true; // default
+      }
         private void KillPlayerAt(int x, int y)
         {
             if (!_isPlayerAlive)

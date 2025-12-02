@@ -3,9 +3,12 @@ using Bomberman.Core.PowerUps;
 
 public class ExtraBombPowerUp : PowerUp
 {
-    public ExtraBombPowerUp(int x, int y) : base(x, y) {}
+    public ExtraBombPowerUp(int x, int y) : base(x, y)
+    {
+        Duration = 10f;
+    }
 
 
     protected override IPlayer OnCollect(IPlayer p)
-        => new ExtraBombDecorator(p);
+        => new ExtraBombDecorator(p,12f);
 }

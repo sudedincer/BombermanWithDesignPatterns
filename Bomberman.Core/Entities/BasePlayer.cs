@@ -6,7 +6,8 @@ public class BasePlayer : IPlayer,IExplosionObserver
 {
     public double X { get; private set; }
     public double Y { get; private set; }
-
+    private int _maxBombCount = 1;
+    private int _bombPower = 1;
     public bool IsAlive { get; set; } = true;
 
     public BasePlayer(double x, double y)
@@ -16,8 +17,12 @@ public class BasePlayer : IPlayer,IExplosionObserver
     }
 
     public virtual double GetSpeed() => 3.5;
-    public virtual int GetBombPower() => 1;
-    public virtual int GetMaxBombCount() => 1;
+    public virtual int GetBombPower() => _bombPower;
+    public virtual int GetMaxBombCount() => _maxBombCount;
+    public void Update(double dt)
+    {
+
+    }
 
     public void Move(double dx, double dy, GameMap map)
     {

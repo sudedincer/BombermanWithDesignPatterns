@@ -5,9 +5,13 @@ namespace Bomberman.Core.PowerUps
 {
     public class SpeedPowerUp : PowerUp
     {
-        public SpeedPowerUp(int x, int y) : base(x, y) {}
+        public SpeedPowerUp(int x, int y) : base(x, y)
+        {
+            Duration=10f;
+        }
+        
 
         protected override IPlayer OnCollect(IPlayer p)
-            => new SpeedBoostDecorator(p);
+            => new SpeedBoostDecorator(p,8f);
     }
 }

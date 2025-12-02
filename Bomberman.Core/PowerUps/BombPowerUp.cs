@@ -8,6 +8,6 @@ namespace Bomberman.Core.PowerUps
         public BombPowerUp(int x, int y) : base(x, y) {}
 
         protected override IPlayer OnCollect(IPlayer p)
-            => new BombPowerDecorator(p);
+            => new BombPowerDecorator(p,10f);
     }
 }

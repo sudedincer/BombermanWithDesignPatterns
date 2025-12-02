@@ -1,8 +1,10 @@
 using Bomberman.Core.Entities;
 
-public class ExtraBombDecorator : PlayerDecorator
+public class ExtraBombDecorator : TimedPlayerDecorator
 {
-    public ExtraBombDecorator(IPlayer inner) : base(inner) {}
+    public ExtraBombDecorator(IPlayer inner, float duration)
+        : base(inner, duration) { }
 
-    public override int GetMaxBombCount() => base.GetMaxBombCount() + 1;
+    public override int GetMaxBombCount()
+        => base.GetMaxBombCount() + 1;
 }
