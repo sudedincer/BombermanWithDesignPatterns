@@ -78,6 +78,10 @@ namespace Bomberman.UI
             Task.Run(() => _gameClient.StartConnectionAsync());
 
             _gameClient.ExplosionReceived += HandleExplosion;
+            _gameMap.ExplosionCell += (cx, cy) =>
+            {
+                _gameView.AddExplosionVisual(cx, cy);
+            };
 
             base.Initialize();
         }
@@ -181,21 +185,15 @@ namespace Bomberman.UI
                 enemy.Update(_gameMap, _player);
             }
 
-// 🔥 POWER-UP SÜRE KONTROLÜ (Doğru konum burası)
-            if (_player is TimedPlayerDecorator timed)
-            {
-                timed.Update(dt);
+    // 🔹 Her durumda önce oyuncuyu update et
+                _player.Update(dt);
 
-                if (timed.IsExpired)
+    // 🔹 Eğer zamanlı bir decorator ise süresi bitmiş mi kontrol et
+                if (_player is TimedPlayerDecorator timed && timed.IsExpired)
                 {
                     timed.RevertEffect();
-                    _player = timed.InnerPlayer;
+                    _player = timed.InnerPlayer; // Süre dolunca eski player'a dön
                 }
-            }
-            else
-            {
-                _player.Update(dt);
-            }
 
             // Bomba koyma (Space, tek tuş basışı)
             if (currentKeyboardState.IsKeyDown(Keys.Space) &&
@@ -231,7 +229,7 @@ namespace Bomberman.UI
                 var bomb = new Bomb(bombX, bombY, power);
 
                 bomb.Attach(_player);
-                bomb.Attach(_gameMap);
+              //  bomb.Attach(_gameMap);
                 bomb.Attach(_gameView);
 
                 foreach (var enemy in _gameMap.Enemies)
@@ -274,36 +272,22 @@ namespace Bomberman.UI
       
         private void ProcessExplosion(int x, int y, int power)
         {
-            // Bombayı bul
             var bomb = _bombs.FirstOrDefault(b => b.X == x && b.Y == y);
             if (bomb != null)
-            {
-                bomb.IsExploded = true;   // 🔥 sadece patlamış olarak işaretle
-                Console.WriteLine("[DEBUG] Bomb exploded at " + x + "," + y);
-            }
+                bomb.IsExploded = true;
 
-            // Merkez hücre
-            ApplyExplosionToCell(x, y);
+            // Yayılımı hesaplayan yer
+            _gameMap.HandleExplosion(x, y, power);
 
-            // 4 yön
-            int[] dx = { 1, -1, 0, 0 };
-            int[] dy = { 0, 0, 1, -1 };
+            // Artık buradan AddExplosionVisual ÇAĞRILMAYACAK ❌
+            // Sadece GameMap → ExplosionCell event'i çizecek
 
-            for (int dir = 0; dir < 4; dir++)
-            {
-                int cx = x;
-                int cy = y;
-
-                for (int step = 1; step <= power; step++)
-                {
-                    cx += dx[dir];
-                    cy += dy[dir];
-
-                    if (!ApplyExplosionToCell(cx, cy))
-                        break;
-                }
-            }
+            KillPlayerAt(x, y);
+            KillEnemiesAt(x, y);
         }
+        
+        
+        
         /// <summary>
       /// Bir hücreye patlama uygular.
       /// false dönerse patlama o yönde durur.

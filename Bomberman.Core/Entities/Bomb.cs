@@ -1,100 +1,95 @@
+using System;
 using System.Collections.Generic;
-using Bomberman.Core.Patterns.Behavioral.Observer;
 using System.Linq;
-using Bomberman.Core.GameLogic; // Kütüphane ekleme
-using Bomberman.Core.Walls;
+using Bomberman.Core.GameLogic;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 
 namespace Bomberman.Core.Entities
 {
-    // Bomb sınıfı, IExplosionSubject arayüzünü uygulayarak Konu (Subject) rolünü üstlenir.
+    /// <summary>
+    /// Bomb = Subject (Konu)
+    /// Observer Pattern: Bomb → Player, Enemy, GameMap, GameView
+    /// Bomb sadece patlama olayını bildirir.
+    /// Patlamanın yayılımını GameMap hesaplar.
+    /// </summary>
     public class Bomb : IExplosionSubject
     {
-        private List<IExplosionObserver> _observers = new List<IExplosionObserver>();
+        private readonly List<IExplosionObserver> _observers = new();
+
         public int X { get; }
         public int Y { get; }
         public int Power { get; }
-        public float TimeSincePlaced { get; private set; }
-        public float TimeRemaining => Lifetime - TimeSincePlaced;
-        public float Lifetime { get; private set; } = 3f; // 3 saniyede patlar
-        public bool IsExploded { get; set; } = false;
 
-        public void Update(float delta)
-        {
-            TimeSincePlaced += delta;
-        }
+        public float Lifetime { get; private set; } = 3f;    // 3 saniyede patlar
+        public float TimeSincePlaced { get; private set; } = 0f;
+        public float TimeRemaining => Math.Max(0, Lifetime - TimeSincePlaced);
+
+        public bool IsExploded { get; set; } = false;
 
         public Bomb(int x, int y, int power)
         {
             X = x;
             Y = y;
-            Power = power; // Bu, patlama menzili olarak kullanılır
+            Power = power;
         }
+
+        // =============================================================
+        // TIMER UPDATE
+        // =============================================================
+
+        public void Update(float delta)
+        {
+            if (IsExploded)
+                return;
+
+            TimeSincePlaced += delta;
+        }
+
+        // =============================================================
+        // OBSERVER REGISTER
+        // =============================================================
 
         public void Attach(IExplosionObserver observer)
         {
-            // Abone listesine ekle
-            _observers.Add(observer);
+            if (!_observers.Contains(observer))
+                _observers.Add(observer);
         }
 
-
-       
         public void Detach(IExplosionObserver observer)
         {
-            // Abonelikten çıkar
             _observers.Remove(observer);
         }
 
+       
+        // =============================================================
+        // NOTIFY (Patlamayı duyurur)
+        // =============================================================
+
         public void Notify(int range)
         {
-            // Tüm gözlemcilere patlama olayını bildir
-            foreach (var observer in _observers.ToList()) // ToList() ile güvenli döngü
+            foreach (var observer in _observers.ToList())
             {
                 observer.OnExplosion(X, Y, range);
             }
         }
 
-        // Bu metot, oyun döngüsünde zamanlayıcı bittiğinde çağrılır.
-        public void Explode(GameMap map)
+        // =============================================================
+        // EXPLODE (Sadece olayı tetikler)
+        // =============================================================
+
+        /// <summary>
+        /// Bomb simply notifies observers.
+        /// Explosion propagation is handled entirely by GameMap.
+        /// </summary>
+        public void Explode()
         {
+            if (IsExploded)
+                return;
+
             IsExploded = true;
 
-            // merkezi bildir
+            // Patlama sinyalini gönder
             Notify(Power);
-
-            int[] dx = { 1, -1, 0, 0 };
-            int[] dy = { 0, 0, 1, -1 };
-
-            for (int i = 0; i < 4; i++)
-            {
-                for (int r = 1; r <= Power; r++)
-                {
-                    int currentX = X + dx[i] * r;
-                    int currentY = Y + dy[i] * r;
-
-                    if (map.IsOutsideBounds(currentX, currentY))
-                        break;
-
-                    var wall = map.GetWallAt(currentX, currentY);
-
-                    if (wall is UnbreakableWall)
-                        break;
-
-                    NotifySingle(currentX, currentY, Power);
-
-                    if (wall is BreakableWall || wall is HardWall)
-                        break;
-                }
-            }
-        }
-
-        // Tek bir kareyi bildiren yardımcı metot
-        private void NotifySingle(int x, int y, int range)
-        {
-            foreach (var observer in _observers.ToList())
-            {
-                observer.OnExplosion(x, y, range);
-            }
-
         }
     }
 }

@@ -2,26 +2,32 @@ using Bomberman.Core.Entities;
 
 public abstract class TimedPlayerDecorator : PlayerDecorator
 {
-    private float duration;
     private float timer;
 
     public bool IsExpired => timer <= 0f;
 
-    public IPlayer InnerPlayer => inner; // Geri dönüş için gerekli getter
+    // Power-up bittiğinde geri dönebilmek için
+    public IPlayer InnerPlayer => inner;
 
-    protected TimedPlayerDecorator(IPlayer inner, float duration)
+    protected TimedPlayerDecorator(IPlayer inner, float durationSeconds)
         : base(inner)
     {
-        timer = duration;
-        this.duration = duration;
+        timer = durationSeconds;
     }
 
-    public void Update(float dt)
+    // 🔹 IPlayer.Update(double dt) imzasını override ediyoruz.
+    public override void Update(double dt)
     {
+        // Süreyi azalt
+        timer -= (float)dt;
+
+        // Normal player davranışını yine çalıştır
         base.Update(dt);
-        timer -= dt;
     }
 
     // Ekstra cleanup gerekiyorsa alt sınıflar override edebilir.
-    public override void RevertEffect() { }
+    public override void RevertEffect()
+    {
+        // Varsayılan olarak ekstra bir şey yapma.
+    }
 }

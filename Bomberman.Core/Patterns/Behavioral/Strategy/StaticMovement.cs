@@ -8,31 +8,25 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
     {
         public (double DeltaX, double DeltaY) CalculateMovement(
             Enemy enemy,
-            GameMap? map,
-            IPlayer? targetPlayer)
+            GameMap map,
+            IPlayer targetPlayer)
         {
-            double speed = enemy.Speed;
-            double nextX = enemy.X;
-            double nextY = enemy.Y;
-            Direction dir = enemy.Direction;
+            double step = enemy.Speed * 0.05; 
 
-            // Basit yatay ileri-geri hareketi
-            if (dir == Direction.Right)
-                nextX += speed;
-            else if (dir == Direction.Left)
-                nextX -= speed;
+            double dx = (enemy.Direction == Direction.Right) ? step : -step;
+            double nextX = enemy.X + dx;
 
-            // Duvara çarptıysa yön değiştir
-            if (map != null && map.IsWallAt(nextX, nextY))
+            // Duvar varsa yön değiş
+            if (map.IsWallAt(nextX, enemy.Y))
             {
-                enemy.Direction = (dir == Direction.Right)
+                enemy.Direction = enemy.Direction == Direction.Right
                     ? Direction.Left
                     : Direction.Right;
 
-                return (0, 0); // Bu frame hareket yok
+                return (0, 0);
             }
 
-            return (dir == Direction.Right ? speed : -speed, 0);
+            return (dx, 0);
         }
     }
 }

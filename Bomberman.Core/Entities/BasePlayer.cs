@@ -19,7 +19,7 @@ public class BasePlayer : IPlayer,IExplosionObserver
     public virtual double GetSpeed() => 3.5;
     public virtual int GetBombPower() => _bombPower;
     public virtual int GetMaxBombCount() => _maxBombCount;
-    public void Update(double dt)
+    public virtual void Update(double dt)
     {
 
     }
