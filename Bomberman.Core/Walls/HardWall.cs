@@ -6,7 +6,11 @@ namespace Bomberman.Core.Walls
         public int Y { get; }
 
         private int _hitsRemaining = 2;   // 2 patlamada yıkılıyor
-        public int HitsRemaining => _hitsRemaining; // GameView buradan okur
+        public int HitsRemaining
+        {
+            get => _hitsRemaining; // GameView buradan okur
+            set => _hitsRemaining = value;
+        }
 
         public HardWall(int x, int y)
         {

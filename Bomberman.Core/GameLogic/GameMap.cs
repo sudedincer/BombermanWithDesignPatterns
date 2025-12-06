@@ -123,15 +123,32 @@ namespace Bomberman.Core.GameLogic
             // GameView görsel çizebilsin
             ExplosionCell?.Invoke(x, y);
 
+           
             var wall = GetWallAt(x, y);
 
+            // KIRILMAZ DUVAR → geçirmez
             if (wall is UnbreakableWall)
                 return false;
 
-            if (wall is BreakableWall || wall is HardWall)
+            // KIRILABİLİR DUVAR → tek vuruşta kırılır
+            if (wall is BreakableWall)
             {
                 RemoveWall(x, y);
                 return false;
+            }
+
+            // HARD WALL → Canı azalır, bitince kırılır ama HER ZAMAN patlamayı durdurur
+            if (wall is HardWall hw)
+            {
+                hw.HitsRemaining--;
+
+                if (hw.HitsRemaining <= 0)
+                {
+                    hw.IsDestroyed = true;
+                    RemoveWall(x, y);
+                }
+
+                return false; // HardWall patlama geçirmez
             }
 
             return true; // boş → patlama devam edebilir

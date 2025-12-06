@@ -43,7 +43,7 @@ namespace Bomberman.UI.View
             CacheTexture("HardDamaged", CreateSolid(graphicsDevice, Color.GreenYellow));
             CacheTexture("Player", CreateSolid(graphicsDevice, Color.Blue));
             CacheTexture("Bomb", CreateSolid(graphicsDevice, Color.Black));
-            CacheTexture("Explosion", CreateSolid(graphicsDevice, Color.Orange));
+            CacheTexture("Explosion", CreateSolid(graphicsDevice, Color.Red));
         }
 
         private void CacheTexture(string key, Texture2D tex)
@@ -131,9 +131,19 @@ namespace Bomberman.UI.View
                     Vector2 pos = new Vector2(c * _tileSize, r * _tileSize);
 
                     var sprite = GetWallSprite(wall);
+                    float scale = 1.35f; // duvarları %25 daha büyük yap
+                    int newSize = (int)(_tileSize * scale);
+
+                    int offset = (newSize - _tileSize) / 2;
+
                     _spriteBatch.Draw(
                         sprite.tex,
-                        new Rectangle(c * _tileSize, r * _tileSize, _tileSize, _tileSize),  
+                        new Rectangle(
+                            c * _tileSize - offset,
+                            r * _tileSize - offset,
+                            newSize,
+                            newSize
+                        ),
                         sprite.src,
                         Color.White
                     );
