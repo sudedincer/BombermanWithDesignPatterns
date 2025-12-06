@@ -26,6 +26,8 @@ namespace Bomberman.UI.View
         private Texture2D _enemyTexture;
         private Texture2D _playerTexture;
         private Texture2D _bombTexture;
+        private Texture2D _desertWallAtlas;
+        private Rectangle[,] _desertWallRects;
 
         public GameView(SpriteBatch spriteBatch, GraphicsDevice graphicsDevice, int tileSize = 64)
         {
@@ -84,6 +86,19 @@ namespace Bomberman.UI.View
             for (int x = 0; x <= width; x++)
                 DrawLine(new Vector2(x * _tileSize, 0), new Vector2(x * _tileSize, height * _tileSize), gridColor);
         }
+        public void SetWallAtlas(Texture2D atlas)
+        {
+            _desertWallAtlas = atlas;
+
+            int slice = 512; // atlas tile size
+
+            _desertWallRects = new Rectangle[2, 2];
+
+            _desertWallRects[0, 0] = new Rectangle(0,       0,       slice, slice); // Unbreakable
+            _desertWallRects[1, 0] = new Rectangle(slice,   0,       slice, slice); // Hard
+            _desertWallRects[0, 1] = new Rectangle(0,       slice,   slice, slice); // Damaged Hard
+            _desertWallRects[1, 1] = new Rectangle(slice,   slice,   slice, slice); // Breakable
+        }
 
         private void DrawLine(Vector2 start, Vector2 end, Color color, int thickness = 1)
         {
@@ -113,33 +128,45 @@ namespace Bomberman.UI.View
                     Wall wall = walls[r, c];
                     if (wall == null || wall.IsDestroyed) continue;
 
-                    Texture2D tex = GetWallTexture(wall);
                     Vector2 pos = new Vector2(c * _tileSize, r * _tileSize);
 
-                    _spriteBatch.Draw(tex, pos, Color.White);
+                    var sprite = GetWallSprite(wall);
+                    _spriteBatch.Draw(
+                        sprite.tex,
+                        new Rectangle(c * _tileSize, r * _tileSize, _tileSize, _tileSize),  
+                        sprite.src,
+                        Color.White
+                    );
                 }
             }
         }
 
-        private Texture2D GetWallTexture(Wall wall)
+        public void ClearExplosions()
         {
-            if (wall is UnbreakableWall)
-                return _textureCache["Unbreakable"];
+            _explosions.Clear();
+        }
+        
 
-            if (wall is BreakableWall)
-                return _textureCache["Breakable"];
+        private (Texture2D tex, Rectangle src) GetWallSprite(Wall wall)
+        {
+            if (_desertWallAtlas == null)
+                return (_textureCache["Unbreakable"], new Rectangle(0, 0, _tileSize, _tileSize));
+
+            if (wall is UnbreakableWall)
+                return (_desertWallAtlas, _desertWallRects[0, 0]);
 
             if (wall is HardWall hw)
             {
-                // Hard wall damage feedback
                 if (hw.HitsRemaining >= 2)
-                    return _textureCache["HardFull"];
+                    return (_desertWallAtlas, _desertWallRects[1, 0]); // Full hard
 
-                if (hw.HitsRemaining == 1)
-                    return _textureCache["HardDamaged"];
+                return (_desertWallAtlas, _desertWallRects[0, 1]);     // Damaged hard
             }
 
-            return _textureCache["Unbreakable"];
+            if (wall is BreakableWall)
+                return (_desertWallAtlas, _desertWallRects[1, 1]);
+
+            return (_desertWallAtlas, _desertWallRects[0, 0]);
         }
 
         private void DrawPlayer(IPlayer player)

@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Bomberman.Core.Entities;
 using Bomberman.Core.GameLogic;
-using Bomberman.Core.Patterns.Behavioral.Observer;
 using Bomberman.Core.Patterns.Creational;
 using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
@@ -19,17 +17,15 @@ using Shared;
 
 namespace Bomberman.UI
 {
-    public class Game1 : Game, IExplosionObserver
+    public class Game1 : Game
     {
-        private readonly ConcurrentQueue<(int x, int y, int power)> _explosionQueue = new();
-
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
 
         private GameView _gameView;
         private GameMap _gameMap;
 
-        private IPlayer _player;                // Decorator kullanılan oyuncu (BasePlayer + power-ups)
+        private IPlayer _player;                
         private bool _isPlayerAlive;
 
         private readonly List<Bomb> _bombs = new();
@@ -48,13 +44,15 @@ namespace Bomberman.UI
 
         private Texture2D _powerUpTexture;
         private Texture2D _enemyTexture;
-        int tileSize = 64;
         private Texture2D _playerTexture;
         private Texture2D _bombTexture;
+        private Texture2D _desertWalls;
+
+        private Rectangle[,] _desertWallRects;
+        private readonly int tileSize = 64;
+
         public Game1()
         {
-            
-
             _graphics = new GraphicsDeviceManager(this);
             _graphics.PreferredBackBufferWidth = _mapWidth * tileSize;
             _graphics.PreferredBackBufferHeight = _mapHeight * tileSize;
@@ -66,7 +64,6 @@ namespace Bomberman.UI
             _wallFactory = new DesertWallFactory();
             _gameMap = new GameMap(_mapWidth, _mapHeight, _wallFactory);
 
-            // Oyuncu: BasePlayer ile başlıyoruz, power-up aldıkça decorator ile sarılacak
             _player = new BasePlayer(1, 1);
             _isPlayerAlive = true;
         }
@@ -74,13 +71,17 @@ namespace Bomberman.UI
         protected override void Initialize()
         {
             _gameClient = new GameClient(HUB_URL);
-
             Task.Run(() => _gameClient.StartConnectionAsync());
 
-            _gameClient.ExplosionReceived += HandleExplosion;
+            // 🔥 Patlamadan etkilenen HER hücre için:
+            //  - explosion sprite'ı çiz
+            //  - player o hücredeyse öldür
+            //  - enemies o hücredeyse öldür
             _gameMap.ExplosionCell += (cx, cy) =>
             {
-                _gameView.AddExplosionVisual(cx, cy);
+                _gameView?.AddExplosionVisual(cx, cy);
+                KillPlayerAt(cx, cy);
+                KillEnemiesAt(cx, cy);
             };
 
             base.Initialize();
@@ -90,21 +91,24 @@ namespace Bomberman.UI
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
             _gameView = new GameView(_spriteBatch, GraphicsDevice);
+
             _overlayPixel = new Texture2D(GraphicsDevice, 1, 1);
             _overlayPixel.SetData(new[] { Color.White });
+
             _powerUpTexture = Content.Load<Texture2D>("Textures/powerups");
             _gameView.SetPowerUpTexture(_powerUpTexture);
-            _enemyTexture = Content.Load<Texture2D>("enemy");
-            _gameView.SetEnemyTexture(_enemyTexture);
-            _playerTexture = Content.Load<Texture2D>("player");
-            _gameView.SetPlayerTexture(_playerTexture);
-            _bombTexture = Content.Load<Texture2D>("bomb");
-            _gameView.SetBombTexture(_bombTexture);
-        }
 
-        private void HandleExplosion(int x, int y, int power)
-        {
-            _explosionQueue.Enqueue((x, y, power));
+            _enemyTexture = Content.Load<Texture2D>("Textures/enemy");
+            _gameView.SetEnemyTexture(_enemyTexture);
+
+            _playerTexture = Content.Load<Texture2D>("Textures/player");
+            _gameView.SetPlayerTexture(_playerTexture);
+
+            _bombTexture = Content.Load<Texture2D>("Textures/bomb");
+            _gameView.SetBombTexture(_bombTexture);
+
+            var atlas = Content.Load<Texture2D>("Textures/dessertWalls");
+            _gameView.SetWallAtlas(atlas);
         }
 
         protected override void Update(GameTime gameTime)
@@ -135,13 +139,7 @@ namespace Bomberman.UI
             var (deltaX, deltaY, _) = InputController.GetCurrentInput();
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-            // Network'ten gelen patlamaları işle
-            while (_explosionQueue.TryDequeue(out var explosionData))
-            {
-                ProcessExplosion(explosionData.x, explosionData.y, explosionData.power);
-            }
-
-            // Oyuncu hareketi (Decorator'dan gelen speed ile)
+            // Oyuncu hareketi
             if (deltaX != 0 || deltaY != 0)
             {
                 double speed = _player.GetSpeed();
@@ -177,70 +175,43 @@ namespace Bomberman.UI
             foreach (var bomb in _bombs)
             {
                 bomb.Update(dt);
+
+                // Süresi dolmuş ve henüz patlamamışsa:
+                if (!bomb.IsExploded && bomb.TimeRemaining <= 0)
+                {
+                    bomb.Explode(); // → Bomb, observer'lara haber verecek (GameMap, GameView, Enemies...)
+                }
             }
 
-// Enemy movement update
+            // Enemy movement update
             foreach (var enemy in _gameMap.Enemies)
             {
                 enemy.Update(_gameMap, _player);
             }
 
-    // 🔹 Her durumda önce oyuncuyu update et
-                _player.Update(dt);
+            // Player update + decorator süresi
+            _player.Update(dt);
 
-    // 🔹 Eğer zamanlı bir decorator ise süresi bitmiş mi kontrol et
-                if (_player is TimedPlayerDecorator timed && timed.IsExpired)
-                {
-                    timed.RevertEffect();
-                    _player = timed.InnerPlayer; // Süre dolunca eski player'a dön
-                }
+            if (_player is TimedPlayerDecorator timed && timed.IsExpired)
+            {
+                timed.RevertEffect();
+                _player = timed.InnerPlayer;
+            }
 
-            // Bomba koyma (Space, tek tuş basışı)
+            // Bomba koyma (Space, tek basış)
             if (currentKeyboardState.IsKeyDown(Keys.Space) &&
                 !_previousKeyboardState.IsKeyDown(Keys.Space))
             {
-                // 🔥 ŞU AN AKTİF OLAN BOMBALARI SAY
                 int activeBombs = _bombs.Count(b => !b.IsExploded);
-
                 int maxBombs = _player.GetMaxBombCount();
                 Console.WriteLine($"[DEBUG] ActiveBombs = {activeBombs}, MaxBombs = {maxBombs}");
 
-                if (activeBombs >= maxBombs)
+                if (activeBombs < maxBombs)
                 {
-                    // Limit dolu → bomba koyma
-                    return;
+                    PlaceBomb();
                 }
-
-                var pos = _player.GetPosition();
-
-                int bombX = (int)Math.Round(pos.X);
-                int bombY = (int)Math.Round(pos.Y);
-
-                int power = _player.GetBombPower(); // Decorator'dan gelen bomba gücü
-
-                var bombDto = new BombDTO
-                {
-                    PlacedByUsername = _username,
-                    X = bombX,
-                    Y = bombY,
-                    Power = power
-                };
-
-                var bomb = new Bomb(bombX, bombY, power);
-
-                bomb.Attach(_player);
-              //  bomb.Attach(_gameMap);
-                bomb.Attach(_gameView);
-
-                foreach (var enemy in _gameMap.Enemies)
-                    bomb.Attach(enemy);
-
-                _bombs.Add(bomb);
-
-                Task.Run(() => _gameClient.PlaceBombAsync(bombDto));
             }
 
-            // Power-up toplama
             CheckPowerUpPickup();
 
             _gameView.Update(gameTime);
@@ -248,8 +219,37 @@ namespace Bomberman.UI
 
             base.Update(gameTime);
         }
-        
-        
+
+        private void PlaceBomb()
+        {
+            var pos = _player.GetPosition();
+
+            int bombX = (int)Math.Round(pos.X);
+            int bombY = (int)Math.Round(pos.Y);
+
+            int power = _player.GetBombPower();
+
+            var bombDto = new BombDTO
+            {
+                PlacedByUsername = _username,
+                X = bombX,
+                Y = bombY,
+                Power = power
+            };
+
+            var bomb = new Bomb(bombX, bombY, power);
+
+            // Observer pattern: bomb → bu nesneleri bilgilendirecek
+            bomb.Attach(_gameMap);   // patlama yayılımı + duvar kırma
+            bomb.Attach(_gameView);  // görsel merkez için (istersen burada da kullanırsın)
+            foreach (var enemy in _gameMap.Enemies)
+                bomb.Attach(enemy);  // enemy'ler de observer
+
+            // NOT: Player ölümünü ve patlama çizimini asıl _gameMap.ExplosionCell üzerinden yapıyoruz
+            _bombs.Add(bomb);
+
+            Task.Run(() => _gameClient.PlaceBombAsync(bombDto));
+        }
 
         private void CheckPowerUpPickup()
         {
@@ -268,76 +268,6 @@ namespace Bomberman.UI
             }
         }
 
-    
-      
-        private void ProcessExplosion(int x, int y, int power)
-        {
-            var bomb = _bombs.FirstOrDefault(b => b.X == x && b.Y == y);
-            if (bomb != null)
-                bomb.IsExploded = true;
-
-            // Yayılımı hesaplayan yer
-            _gameMap.HandleExplosion(x, y, power);
-
-            // Artık buradan AddExplosionVisual ÇAĞRILMAYACAK ❌
-            // Sadece GameMap → ExplosionCell event'i çizecek
-
-            KillPlayerAt(x, y);
-            KillEnemiesAt(x, y);
-        }
-        
-        
-        
-        /// <summary>
-      /// Bir hücreye patlama uygular.
-      /// false dönerse patlama o yönde durur.
-      /// </summary>
-      private bool ApplyExplosionToCell(int x, int y)
-      {
-          // Harita dışında → devam etmesin
-          if (_gameMap.IsOutsideBounds(x, y))
-              return false;
-
-          // Patlama efekti göster
-          _gameView.AddExplosionVisual(x, y);
-
-          // Oyuncuları öldür
-          KillPlayerAt(x, y);
-        //  KillRemotePlayerAt(x, y);
-
-          // Enemy öldür
-          KillEnemiesAt(x, y);
-
-          // Duvar kontrolü
-          var wall = _gameMap.GetWallAt(x, y);
-
-          if (wall == null)
-              return true; // Boş → devam et
-
-          // Kırılamaz
-          if (wall is UnbreakableWall)
-              return false;
-
-          // Breakable
-          if (wall is BreakableWall)
-          {
-              _gameMap.RemoveWall(x, y);
-              return false;
-          }
-
-          // Hard wall (çok vuruşluk)
-          if (wall is HardWall hw)
-          {
-              hw.OnExplosion(x, y, 1);
-
-              if (hw.IsDestroyed)
-                  _gameMap.RemoveWall(x, y);
-
-              return false;
-          }
-
-          return true; // default
-      }
         private void KillPlayerAt(int x, int y)
         {
             if (!_isPlayerAlive)
@@ -353,6 +283,36 @@ namespace Bomberman.UI
             }
         }
 
+        private void CheckPlayerEnemyCollision()
+        {
+            foreach (var enemy in _gameMap.Enemies)
+            {
+                int ex = (int)Math.Round(enemy.X);
+                int ey = (int)Math.Round(enemy.Y);
+
+                var pos = _player.GetPosition();
+                int px = (int)Math.Round(pos.X);
+                int py = (int)Math.Round(pos.Y);
+
+                if (px == ex && py == ey)
+                {
+                    _isPlayerAlive = false;
+                    return;
+                }
+            }
+        }
+
+        private void KillEnemiesAt(int x, int y)
+        {
+            var dead = _gameMap.Enemies
+                .Where(e => (int)Math.Round(e.X) == x &&
+                            (int)Math.Round(e.Y) == y)
+                .ToList();
+
+            foreach (var e in dead)
+                _gameMap.Enemies.Remove(e);
+        }
+
         private void RestartGame()
         {
             _gameMap = new GameMap(_mapWidth, _mapHeight, _wallFactory);
@@ -360,9 +320,16 @@ namespace Bomberman.UI
             _player = new BasePlayer(1, 1);
             _isPlayerAlive = true;
 
-            _bombs.Clear();
+            // Explosion event yeniden bağlanmalı
+            _gameMap.ExplosionCell += (cx, cy) =>
+            {
+                _gameView.AddExplosionVisual(cx, cy);
+                KillPlayerAt(cx, cy);
+                KillEnemiesAt(cx, cy);
+            };
 
-            while (_explosionQueue.TryDequeue(out _)) { }
+            _bombs.Clear();
+            _gameView.ClearExplosions();
 
             _previousKeyboardState = Keyboard.GetState();
         }
@@ -431,7 +398,6 @@ namespace Bomberman.UI
                           "X   X",
                           "X   X",
                           "X   X" }},
-
             { 'E', new[]{ "XXXXX",
                           "X    ",
                           "X    ",
@@ -439,7 +405,6 @@ namespace Bomberman.UI
                           "X    ",
                           "X    ",
                           "XXXXX" }},
-
             { 'G', new[]{ " XXX ",
                           "X   X",
                           "X    ",
@@ -447,7 +412,6 @@ namespace Bomberman.UI
                           "X   X",
                           "X   X",
                           " XXX " }},
-
             { 'M', new[]{ "X   X",
                           "XX XX",
                           "X X X",
@@ -455,7 +419,6 @@ namespace Bomberman.UI
                           "X   X",
                           "X   X",
                           "X   X" }},
-
             { 'O', new[]{ " XXX ",
                           "X   X",
                           "X   X",
@@ -463,7 +426,6 @@ namespace Bomberman.UI
                           "X   X",
                           "X   X",
                           " XXX " }},
-
             { 'V', new[]{ "X   X",
                           "X   X",
                           "X   X",
@@ -471,7 +433,6 @@ namespace Bomberman.UI
                           " X X ",
                           " X X ",
                           "  X  " }},
-
             { 'R', new[]{ "XXXX ",
                           "X   X",
                           "X   X",
@@ -479,7 +440,6 @@ namespace Bomberman.UI
                           "X X  ",
                           "X  X ",
                           "X   X" }},
-
             { 'P', new[]{ "XXXX ",
                           "X   X",
                           "X   X",
@@ -487,7 +447,6 @@ namespace Bomberman.UI
                           "X    ",
                           "X    ",
                           "X    " }},
-
             { 'S', new[]{ " XXXX",
                           "X    ",
                           "X    ",
@@ -495,7 +454,6 @@ namespace Bomberman.UI
                           "    X",
                           "    X",
                           "XXXX " }},
-
             { 'T', new[]{ "XXXXX",
                           "  X  ",
                           "  X  ",
@@ -503,7 +461,6 @@ namespace Bomberman.UI
                           "  X  ",
                           "  X  ",
                           "  X  " }},
-
             { ' ', new[]{ "     ",
                           "     ",
                           "     ",
@@ -533,65 +490,13 @@ namespace Bomberman.UI
                             scale
                         );
 
-                        Rectangle outlineRect = new Rectangle(rect.X - 1, rect.Y - 1, rect.Width + 2, rect.Height + 2);
+                        Rectangle outlineRect =
+                            new Rectangle(rect.X - 1, rect.Y - 1, rect.Width + 2, rect.Height + 2);
                         _spriteBatch.Draw(_overlayPixel, outlineRect, outline);
                         _spriteBatch.Draw(_overlayPixel, rect, fill);
                     }
                 }
             }
         }
-        
-        private void CheckPlayerEnemyCollision()
-        {
-            foreach (var enemy in _gameMap.Enemies)
-            {
-                // Tile bazlı çarpışma
-                int ex = (int)Math.Round(enemy.X);
-                int ey = (int)Math.Round(enemy.Y);
-
-                var pos = _player.GetPosition();
-                int px = (int)Math.Round(pos.X);
-                int py = (int)Math.Round(pos.Y);
-
-                if (px == ex && py == ey)
-                {
-                    _isPlayerAlive = false;
-                    return;
-                }
-            }
-        }
-        
-        private void KillEnemiesAt(int x, int y)
-        {
-            var dead = _gameMap.Enemies
-                .Where(e => (int)Math.Round(e.X) == x &&
-                            (int)Math.Round(e.Y) == y)
-                .ToList();
-
-            foreach (var e in dead)
-                _gameMap.Enemies.Remove(e);
-        }
-        
-        public void SetPlayerTexture(Texture2D tex)
-        {
-            _playerTexture = tex;
-        }
-
-
-        public void OnExplosion(int x, int y, int power)
-        {
-            // Enemy öldür
-            KillEnemiesAt(x, y);
-
-            // Oyuncu öldür
-            KillPlayerAt(x, y);
-
-            // Duvar kır
-            _gameMap.RemoveWall(x, y);
-
-            // Görsel efekt -> zaten GameView içinde bu metot var
-            _gameView.AddExplosionVisual(x, y);
-        }
     }
-    
 }

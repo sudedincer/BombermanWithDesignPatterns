@@ -6,11 +6,12 @@ using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
 using Bomberman.Core.Entities;
 using Bomberman.Core.Factories;
+using Bomberman.Core.Patterns.Behavioral.Observer;
 using Bomberman.Core.Patterns.Creational;
 
 namespace Bomberman.Core.GameLogic
 {
-    public class GameMap
+    public class GameMap :IExplosionObserver
     {
         public int Width { get; }
         public int Height { get; }
@@ -19,6 +20,8 @@ namespace Bomberman.Core.GameLogic
         public List<PowerUp> PowerUps { get; } = new();
 
         private readonly Random _rng = new();
+
+        // GameView'in patlamayı çizebilmesi için event
         public event Action<int, int> ExplosionCell;
 
         public GameMap(int width, int height, IWallFactory factory)
@@ -42,30 +45,25 @@ namespace Bomberman.Core.GameLogic
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    // Dış kenarlar
-                    if (x == 0 || x == Width - 1 ||
-                        y == 0 || y == Height - 1)
+                    if (x == 0 || x == Width - 1 || y == 0 || y == Height - 1)
                     {
                         Walls[y, x] = factory.CreateWall(WallType.Unbreakable, x, y, this);
                         continue;
                     }
 
-                    // İç kolonlar
                     if (x % 2 == 0 && y % 2 == 0)
                     {
                         Walls[y, x] = factory.CreateWall(WallType.Unbreakable, x, y, this);
                         continue;
                     }
 
-                    // %10 hard
-                    if (_rng.Next(0, 100) < 10)
+                    if (_rng.Next(100) < 10)
                     {
                         Walls[y, x] = factory.CreateWall(WallType.Hard, x, y, this);
                         continue;
                     }
 
-                    // %40 breakable
-                    if (_rng.Next(0, 100) < 40)
+                    if (_rng.Next(100) < 40)
                     {
                         Walls[y, x] = factory.CreateWall(WallType.Breakable, x, y, this);
                         continue;
@@ -75,7 +73,7 @@ namespace Bomberman.Core.GameLogic
         }
 
         // ============================================================
-        // 2) BAŞLANGIÇ ALANI TEMİZLE
+        // 2) BAŞLANGIÇ ALANINI TEMİZLE
         // ============================================================
 
         private void ClearStartArea()
@@ -91,17 +89,17 @@ namespace Bomberman.Core.GameLogic
         }
 
         // ============================================================
-        // 3) SAFE RANDOM ENEMY SPAWN
+        // 3) ENEMY SPAWN
         // ============================================================
 
         private void SpawnEnemiesRandomAndSafe()
         {
-            SpawnEnemyAtRandomEmptyTile(EnemyType.RandomWalker);
-            SpawnEnemyAtRandomEmptyTile(EnemyType.Static);
-            SpawnEnemyAtRandomEmptyTile(EnemyType.Chaser);
+            SpawnEnemy(EnemyType.RandomWalker);
+            SpawnEnemy(EnemyType.Static);
+            SpawnEnemy(EnemyType.Chaser);
         }
 
-        private void SpawnEnemyAtRandomEmptyTile(EnemyType type)
+        private void SpawnEnemy(EnemyType type)
         {
             while (true)
             {
@@ -117,45 +115,14 @@ namespace Bomberman.Core.GameLogic
         }
 
         // ============================================================
-        // 4) PATLAMA YAYILIMI — TEK MERKEZ
+        // 4) TEK HÜCREYE PATLAMA ETKİSİ
         // ============================================================
 
-        public void HandleExplosion(int x, int y, int power)
+        public bool ApplyExplosionToCell(int x, int y)
         {
-            ApplyExplosionToCell(x, y);
-
-            // 4 yön
-            int[] dx = { 1, -1, 0, 0 };
-            int[] dy = { 0, 0, 1, -1 };
-
-            for (int dir = 0; dir < 4; dir++)
-            {
-                int cx = x;
-                int cy = y;
-
-                for (int step = 1; step <= power; step++)
-                {
-                    cx += dx[dir];
-                    cy += dy[dir];
-
-                    if (IsOutsideBounds(cx, cy))
-                        break;
-
-                    if (!ApplyExplosionToCell(cx, cy))
-                        break;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Patlamanın uygulandığı tek hücre.
-        /// True → patlama devam eder.
-        /// False → patlama bu yönde durur.
-        /// </summary>
-        private bool ApplyExplosionToCell(int x, int y)
-        {
+            // GameView görsel çizebilsin
             ExplosionCell?.Invoke(x, y);
-            // Duvar kırma
+
             var wall = GetWallAt(x, y);
 
             if (wall is UnbreakableWall)
@@ -167,18 +134,12 @@ namespace Bomberman.Core.GameLogic
                 return false;
             }
 
-            return true;
+            return true; // boş → patlama devam edebilir
         }
 
         // ============================================================
         // 5) DUVAR KIRMA
         // ============================================================
-
-        public Wall GetWallAt(int x, int y)
-        {
-            if (IsOutsideBounds(x, y)) return null;
-            return Walls[y, x];
-        }
 
         public void RemoveWall(int x, int y)
         {
@@ -192,23 +153,26 @@ namespace Bomberman.Core.GameLogic
             if (!wall.CanBeDestroyed())
                 return;
 
-            // Power-up?
             if (_rng.NextDouble() < GameConfig.Instance.PowerUpDropRate)
-            {
                 PowerUps.Add(PowerUpFactory.CreateRandomPowerUp(x, y));
-            }
 
             Walls[y, x] = null;
         }
 
+        public Wall GetWallAt(int x, int y)
+        {
+            if (IsOutsideBounds(x, y))
+                return null;
+
+            return Walls[y, x];
+        }
+
         // ============================================================
-        // 6) DUVAR/GRID KONTROLLERİ
+        // 6) KONTROLLER
         // ============================================================
 
         public bool IsOutsideBounds(int x, int y)
-        {
-            return x < 0 || y < 0 || x >= Width || y >= Height;
-        }
+            => x < 0 || y < 0 || x >= Width || y >= Height;
 
         public bool IsWallAt(double x, double y)
         {
@@ -220,6 +184,34 @@ namespace Bomberman.Core.GameLogic
 
             var wall = Walls[gy, gx];
             return wall != null && !wall.IsDestroyed;
+        }
+        public void OnExplosion(int x, int y, int power)
+        {
+            // Merkez patlama
+            ApplyExplosionToCell(x, y);
+
+            int[] dx = { 1, -1, 0, 0 };
+            int[] dy = { 0, 0, 1, -1 };
+
+            for (int dir = 0; dir < 4; dir++)
+            {
+                int cx = x;
+                int cy = y;
+
+                for (int step = 1; step <= power; step++)
+                {
+                    cx += dx[dir];
+                    cy += dy[dir];
+
+                    // Harita dışında → durdur
+                    if (IsOutsideBounds(cx, cy))
+                        break;
+
+                    // Patlama bu hücrede devam ederse ilerle
+                    if (!ApplyExplosionToCell(cx, cy))
+                        break;
+                }
+            }
         }
     }
 }
