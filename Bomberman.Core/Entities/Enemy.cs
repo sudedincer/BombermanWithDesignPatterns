@@ -9,9 +9,11 @@ namespace Bomberman.Core.Entities
     {
         public double X { get; private set; }
         public double Y { get; private set; }
+        private static int _globalIdCounter = 0;
+        public int VisualId { get; } = System.Threading.Interlocked.Increment(ref _globalIdCounter);
         public bool IsAlive { get; set; } = true;
 
-        public double Speed { get; set; } = 0.5;
+        public double Speed { get; set; } = 0.2; // Slower speed (was 0.5)
         public Direction Direction { get; set; } = Direction.Right;
 
         private IMovementStrategy? _movementStrategy;

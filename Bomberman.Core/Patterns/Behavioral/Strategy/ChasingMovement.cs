@@ -31,14 +31,15 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
             double nextY = ey + dy;
 
             // Eğer direkt yol kapalıysa X ve Y ayrı ayrı denenir
-            if (map.IsWallAt(nextX, nextY))
+            // Check Collision using Center Point (Offset + 0.5)
+            if (map.CheckCollision(nextX + 0.5, nextY + 0.5))
             {
                 // Önce sadece X hareketi dene
-                if (!map.IsWallAt(nextX, ey))
+                if (!map.CheckCollision(nextX + 0.5, ey + 0.5))
                     return (dx, 0);
 
                 // Sonra sadece Y hareketi dene
-                if (!map.IsWallAt(ex, nextY))
+                if (!map.CheckCollision(ex + 0.5, nextY + 0.5))
                     return (0, dy);
 
                 // Hiç biri olmazsa bu kare dur

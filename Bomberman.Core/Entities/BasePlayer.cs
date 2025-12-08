@@ -26,8 +26,41 @@ public class BasePlayer : IPlayer,IExplosionObserver
 
     public void Move(double dx, double dy, GameMap map)
     {
-        X += dx;
-        Y += dy;
+        double sensitivity = 0.15; // How far to check for a gap
+
+        // 1. Try Moving X
+        if (!map.CheckCollision(X + dx + 0.5, Y + 0.5))
+        {
+            X += dx;
+        }
+        else if (dx != 0) // Blocked on X? Try to Slide Y
+        {
+            double slideSpeed = Math.Abs(dx);
+            
+            // Check Up
+            if (!map.CheckCollision(X + dx + 0.5, Y + 0.5 - sensitivity))
+                Y -= slideSpeed;
+            // Check Down
+            else if (!map.CheckCollision(X + dx + 0.5, Y + 0.5 + sensitivity))
+                Y += slideSpeed;
+        }
+
+        // 2. Try Moving Y
+        if (!map.CheckCollision(X + 0.5, Y + dy + 0.5))
+        {
+            Y += dy;
+        }
+        else if (dy != 0) // Blocked on Y? Try to Slide X
+        {
+            double slideSpeed = Math.Abs(dy);
+
+            // Check Left
+            if (!map.CheckCollision(X + 0.5 - sensitivity, Y + dy + 0.5))
+                X -= slideSpeed;
+            // Check Right
+            else if (!map.CheckCollision(X + 0.5 + sensitivity, Y + dy + 0.5))
+                X += slideSpeed;
+        }
     }
 
     public (double X, double Y) GetPosition() => (X, Y);

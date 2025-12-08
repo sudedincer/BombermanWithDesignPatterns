@@ -23,7 +23,7 @@ namespace Bomberman.UI.View
         private Rectangle _boxRect;
         private int _iconSize;
         private readonly List<(int X, int Y, float Timer)> _explosions = new();
-        private Texture2D _enemyTexture;
+        private List<Texture2D> _enemyTextures;
         private Texture2D _playerTexture;
         private Texture2D _bombTexture;
         private Texture2D _desertWallAtlas;
@@ -86,18 +86,36 @@ namespace Bomberman.UI.View
             for (int x = 0; x <= width; x++)
                 DrawLine(new Vector2(x * _tileSize, 0), new Vector2(x * _tileSize, height * _tileSize), gridColor);
         }
+        private Texture2D _wallUnbreakable;
+        private Texture2D _wallHard;
+        private Texture2D _wallHardDamaged;
+        private Texture2D _wallBreakable;
+
+        // Legacy Atlas Support
+        private Texture2D _legacyAtlas;
+        private Rectangle[,] _legacyAtlasRects;
+
+        public void SetWallTextures(Texture2D unbreakable, Texture2D hard, Texture2D hardDamaged, Texture2D breakable)
+        {
+            _wallUnbreakable = unbreakable;
+            _wallHard = hard;
+            _wallHardDamaged = hardDamaged;
+            _wallBreakable = breakable;
+            
+            _legacyAtlas = null; // Disable atlas mode
+        }
+
         public void SetWallAtlas(Texture2D atlas)
         {
-            _desertWallAtlas = atlas;
+            _legacyAtlas = atlas;
+            _wallUnbreakable = null; // Disable split mode
 
-            int slice = 512; // atlas tile size
-
-            _desertWallRects = new Rectangle[2, 2];
-
-            _desertWallRects[0, 0] = new Rectangle(0,       0,       slice, slice); // Unbreakable
-            _desertWallRects[1, 0] = new Rectangle(slice,   0,       slice, slice); // Hard
-            _desertWallRects[0, 1] = new Rectangle(0,       slice,   slice, slice); // Damaged Hard
-            _desertWallRects[1, 1] = new Rectangle(slice,   slice,   slice, slice); // Breakable
+            int slice = 512;
+            _legacyAtlasRects = new Rectangle[2, 2];
+            _legacyAtlasRects[0, 0] = new Rectangle(0,       0,       slice, slice); // Unbreakable
+            _legacyAtlasRects[1, 0] = new Rectangle(slice,   0,       slice, slice); // Hard
+            _legacyAtlasRects[0, 1] = new Rectangle(0,       slice,   slice, slice); // Damaged Hard
+            _legacyAtlasRects[1, 1] = new Rectangle(slice,   slice,   slice, slice); // Breakable
         }
 
         private void DrawLine(Vector2 start, Vector2 end, Color color, int thickness = 1)
@@ -131,18 +149,14 @@ namespace Bomberman.UI.View
                     Vector2 pos = new Vector2(c * _tileSize, r * _tileSize);
 
                     var sprite = GetWallSprite(wall);
-                    float scale = 1.35f; // duvarları %25 daha büyük yap
-                    int newSize = (int)(_tileSize * scale);
-
-                    int offset = (newSize - _tileSize) / 2;
-
+                    
                     _spriteBatch.Draw(
                         sprite.tex,
                         new Rectangle(
-                            c * _tileSize - offset,
-                            r * _tileSize - offset,
-                            newSize,
-                            newSize
+                            c * _tileSize,
+                            r * _tileSize,
+                            _tileSize,
+                            _tileSize
                         ),
                         sprite.src,
                         Color.White
@@ -155,28 +169,38 @@ namespace Bomberman.UI.View
         {
             _explosions.Clear();
         }
-        
-
         private (Texture2D tex, Rectangle src) GetWallSprite(Wall wall)
         {
-            if (_desertWallAtlas == null)
-                return (_textureCache["Unbreakable"], new Rectangle(0, 0, _tileSize, _tileSize));
-
-            if (wall is UnbreakableWall)
-                return (_desertWallAtlas, _desertWallRects[0, 0]);
-
-            if (wall is HardWall hw)
+            // 1. Try Split Textures
+            if (_wallUnbreakable != null)
             {
-                if (hw.HitsRemaining >= 2)
-                    return (_desertWallAtlas, _desertWallRects[1, 0]); // Full hard
-
-                return (_desertWallAtlas, _desertWallRects[0, 1]);     // Damaged hard
+                if (wall is UnbreakableWall) return (_wallUnbreakable, _wallUnbreakable.Bounds);
+                if (wall is HardWall hw)
+                {
+                    if (hw.HitsRemaining >= 2) return (_wallHard, _wallHard.Bounds);
+                    return (_wallHardDamaged, _wallHardDamaged.Bounds);
+                }
+                if (wall is BreakableWall) return (_wallBreakable, _wallBreakable.Bounds);
+                return (_wallUnbreakable, _wallUnbreakable.Bounds);
             }
 
-            if (wall is BreakableWall)
-                return (_desertWallAtlas, _desertWallRects[1, 1]);
+            // 2. Try Legacy Atlas
+            if (_legacyAtlas != null)
+            {
+                 if (wall is UnbreakableWall) return (_legacyAtlas, _legacyAtlasRects[0, 0]);
+                 if (wall is HardWall hw)
+                 {
+                     if (hw.HitsRemaining >= 2) return (_legacyAtlas, _legacyAtlasRects[1, 0]);
+                     return (_legacyAtlas, _legacyAtlasRects[0, 1]);
+                 }
+                 if (wall is BreakableWall) return (_legacyAtlas, _legacyAtlasRects[1, 1]);
+                 return (_legacyAtlas, _legacyAtlasRects[0, 0]);
+            }
 
-            return (_desertWallAtlas, _desertWallRects[0, 0]);
+            // 3. Fallback
+             if (_textureCache.ContainsKey("Unbreakable"))
+                return (_textureCache["Unbreakable"], new Rectangle(0,0,_tileSize,_tileSize));
+             return (_pixel, new Rectangle(0,0,1,1));
         }
 
         private void DrawPlayer(IPlayer player)
@@ -338,25 +362,30 @@ namespace Bomberman.UI.View
         
         public void DrawEnemies(List<Enemy> enemies)
         {
+            if (_enemyTextures == null || _enemyTextures.Count == 0)
+                return;
+
             foreach (var e in enemies)
             {
                 if (!e.IsAlive)
                     continue;
 
-                if (_enemyTexture == null)
-                    continue;
+                // Pick texture based on unique Round-Robin ID
+                int index = e.VisualId % _enemyTextures.Count;
+                var tex = _enemyTextures[index];
 
                 int px = (int)(e.X * _tileSize);
                 int py = (int)(e.Y * _tileSize);
 
                 Rectangle dest = new Rectangle(px, py, _tileSize, _tileSize);
 
-                _spriteBatch.Draw(_enemyTexture, dest, Color.White);
+                _spriteBatch.Draw(tex, dest, Color.White);
             }
         }
-        public void SetEnemyTexture(Texture2D tex)
+
+        public void SetEnemyTextures(List<Texture2D> textures)
         {
-            _enemyTexture = tex;
+            _enemyTextures = textures;
         }
 
         public void SetPlayerTexture(Texture2D tex)
@@ -366,6 +395,12 @@ namespace Bomberman.UI.View
         public void SetBombTexture(Texture2D tex)
         {
             _bombTexture = tex;
+        }
+
+        public void SetExplosionTexture(Texture2D tex)
+        {
+            if (tex != null)
+                _textureCache["Explosion"] = tex; // Force overwrite
         }
 
         public void OnExplosion(int x, int y, int power)

@@ -35,7 +35,8 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
             double nextY = enemy.Y + dy;
 
             // Çarparsa yeni yön seç
-            if (map.IsWallAt(nextX, nextY))
+            // Check Center (Offset + 0.5)
+            if (map.CheckCollision(nextX + 0.5, nextY + 0.5))
             {
                 enemy.Direction = (Direction)_rng.Next(0, 4);
                 _stepsRemaining = _rng.Next(10, 40);

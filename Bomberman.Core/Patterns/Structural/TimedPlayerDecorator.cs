@@ -21,6 +21,11 @@ public abstract class TimedPlayerDecorator : PlayerDecorator
         // Süreyi azalt
         timer -= (float)dt;
 
+        if (timer <= 0)
+        {
+             RevertEffect();
+        }
+
         // Normal player davranışını yine çalıştır
         base.Update(dt);
     }

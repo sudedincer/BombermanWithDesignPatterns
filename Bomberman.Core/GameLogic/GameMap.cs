@@ -193,8 +193,8 @@ namespace Bomberman.Core.GameLogic
 
         public bool IsWallAt(double x, double y)
         {
-            int gx = (int)Math.Round(x);
-            int gy = (int)Math.Round(y);
+            int gx = (int)Math.Floor(x);
+            int gy = (int)Math.Floor(y);
 
             if (IsOutsideBounds(gx, gy))
                 return true;
@@ -202,6 +202,24 @@ namespace Bomberman.Core.GameLogic
             var wall = Walls[gy, gx];
             return wall != null && !wall.IsDestroyed;
         }
+
+        public bool CheckCollision(double x, double y, double size = 0.55)
+        {
+            // Check 4 corners of the bounding box
+            double half = size / 2.0;
+            
+            // Top-Left
+            if (IsWallAt(x - half, y - half)) return true;
+            // Top-Right
+            if (IsWallAt(x + half, y - half)) return true;
+            // Bottom-Left
+            if (IsWallAt(x - half, y + half)) return true;
+            // Bottom-Right
+            if (IsWallAt(x + half, y + half)) return true;
+            
+            return false;
+        }
+
         public void OnExplosion(int x, int y, int power)
         {
             // Merkez patlama

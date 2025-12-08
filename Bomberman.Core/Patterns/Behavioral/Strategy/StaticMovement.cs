@@ -17,7 +17,8 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
             double nextX = enemy.X + dx;
 
             // Duvar varsa yön değiş
-            if (map.IsWallAt(nextX, enemy.Y))
+            // Check Center (Offset + 0.5)
+            if (map.CheckCollision(nextX + 0.5, enemy.Y + 0.5))
             {
                 enemy.Direction = enemy.Direction == Direction.Right
                     ? Direction.Left
