@@ -24,94 +24,25 @@ namespace Bomberman.Core.GameLogic
         // GameView'in patlamayı çizebilmesi için event
         public event Action<int, int> ExplosionCell;
 
-        public GameMap(int width, int height, IWallFactory factory)
+        public GameMap(int width, int height)
         {
             Width = width;
             Height = height;
             Walls = new Wall[height, width];
-
-            GenerateWalls(factory);
-            ClearStartArea();
-            SpawnEnemiesRandomAndSafe();
         }
 
-        // ============================================================
-        // 1) DUVAR OLUŞTURMA
-        // ============================================================
-
-        private void GenerateWalls(IWallFactory factory)
+        // Methods for Builder to use
+        public void SetWall(int x, int y, Wall wall)
         {
-            for (int y = 0; y < Height; y++)
+            if (!IsOutsideBounds(x, y))
             {
-                for (int x = 0; x < Width; x++)
-                {
-                    if (x == 0 || x == Width - 1 || y == 0 || y == Height - 1)
-                    {
-                        Walls[y, x] = factory.CreateWall(WallType.Unbreakable, x, y, this);
-                        continue;
-                    }
-
-                    if (x % 2 == 0 && y % 2 == 0)
-                    {
-                        Walls[y, x] = factory.CreateWall(WallType.Unbreakable, x, y, this);
-                        continue;
-                    }
-
-                    if (_rng.Next(100) < 10)
-                    {
-                        Walls[y, x] = factory.CreateWall(WallType.Hard, x, y, this);
-                        continue;
-                    }
-
-                    if (_rng.Next(100) < 40)
-                    {
-                        Walls[y, x] = factory.CreateWall(WallType.Breakable, x, y, this);
-                        continue;
-                    }
-                }
+                Walls[y, x] = wall;
             }
         }
 
-        // ============================================================
-        // 2) BAŞLANGIÇ ALANINI TEMİZLE
-        // ============================================================
-
-        private void ClearStartArea()
+        public void AddEnemy(Enemy enemy)
         {
-            for (int y = 1; y <= 3; y++)
-            {
-                for (int x = 1; x <= 3; x++)
-                {
-                    if (!(Walls[y, x] is UnbreakableWall))
-                        Walls[y, x] = null;
-                }
-            }
-        }
-
-        // ============================================================
-        // 3) ENEMY SPAWN
-        // ============================================================
-
-        private void SpawnEnemiesRandomAndSafe()
-        {
-            SpawnEnemy(EnemyType.RandomWalker);
-            SpawnEnemy(EnemyType.Static);
-            SpawnEnemy(EnemyType.Chaser);
-        }
-
-        private void SpawnEnemy(EnemyType type)
-        {
-            while (true)
-            {
-                int x = _rng.Next(1, Width - 1);
-                int y = _rng.Next(1, Height - 1);
-
-                if (!IsWallAt(x, y))
-                {
-                    Enemies.Add(EnemyFactory.CreateEnemy(x, y, type));
-                    break;
-                }
-            }
+            Enemies.Add(enemy);
         }
 
         // ============================================================

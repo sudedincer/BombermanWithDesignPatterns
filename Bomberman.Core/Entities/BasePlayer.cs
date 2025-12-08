@@ -69,8 +69,8 @@ public class BasePlayer : IPlayer,IExplosionObserver
         if (!IsAlive)
             return;
 
-        if ((int)Math.Round(X) == x &&
-            (int)Math.Round(Y) == y)
+        if ((int)Math.Floor(X + 0.5) == x &&
+            (int)Math.Floor(Y + 0.5) == y)
         {
             IsAlive = false;
             Console.WriteLine("Player died from explosion!");

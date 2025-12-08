@@ -6,6 +6,7 @@ using Bomberman.Core.Entities;
 using Bomberman.Core.Enums;
 using Bomberman.Core.GameLogic;
 using Bomberman.Core.Patterns.Creational;
+using Bomberman.Core.Patterns.Creational.Builder;
 using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
 using Bomberman.Services.Network;
@@ -47,8 +48,17 @@ namespace Bomberman.UI.Scenes
             // 2) Tema'ya göre wall factory
             IWallFactory factory = WallFactory.Create(_theme);
 
-            // 3) Map + Player
-            _map = new GameMap(Game.MapWidth, Game.MapHeight, factory);
+            // 3) Map + Player (Using Builder Pattern)
+            ClassicMapBuilder mapBuilder = new ClassicMapBuilder();
+            mapBuilder.SetDimensions(Game.MapWidth, Game.MapHeight);
+            mapBuilder.SetTheme(factory);
+            
+            mapBuilder.BuildWalls();
+            mapBuilder.ClearSafeZone();
+            mapBuilder.SpawnEnemies(3); // count not strictly used by ClassicBuilder yet but good practice
+
+            _map = mapBuilder.GetMap();
+            
             _player = new BasePlayer(1, 1);
             _isPlayerAlive = true;
 
@@ -243,9 +253,12 @@ namespace Bomberman.UI.Scenes
         {
             var pos = _player.GetPosition();
 
-            int bombX = (int)Math.Round(pos.X);
-            int bombY = (int)Math.Round(pos.Y);
+            // Center-based tile mapping
+            int bombX = (int)Math.Floor(pos.X + 0.5);
+            int bombY = (int)Math.Floor(pos.Y + 0.5);
             int power = _player.GetBombPower();
+
+            System.Console.WriteLine($"[DEBUG] Placing Bomb at ({bombX}, {bombY})");
 
             var bombDto = new BombDTO
             {
@@ -272,8 +285,8 @@ namespace Bomberman.UI.Scenes
         {
             var pos = _player.GetPosition();
 
-            int px = (int)Math.Round(pos.X);
-            int py = (int)Math.Round(pos.Y);
+            int px = (int)Math.Floor(pos.X + 0.5);
+            int py = (int)Math.Floor(pos.Y + 0.5);
 
             foreach (var p in _map.PowerUps)
             {
@@ -322,8 +335,8 @@ namespace Bomberman.UI.Scenes
         private void KillEnemiesAt(int x, int y)
         {
             var dead = _map.Enemies
-                .Where(e => (int)Math.Round(e.X) == x &&
-                            (int)Math.Round(e.Y) == y)
+                .Where(e => (int)Math.Floor(e.X + 0.5) == x &&
+                            (int)Math.Floor(e.Y + 0.5) == y)
                 .ToList();
 
             foreach (var e in dead)
@@ -337,7 +350,15 @@ namespace Bomberman.UI.Scenes
                 _map.ExplosionCell -= OnExplosionCell;
 
             IWallFactory factory = WallFactory.Create(_theme);
-            _map = new GameMap(Game.MapWidth, Game.MapHeight, factory);
+            ClassicMapBuilder mapBuilder = new ClassicMapBuilder();
+            mapBuilder.SetDimensions(Game.MapWidth, Game.MapHeight);
+            mapBuilder.SetTheme(factory);
+
+            mapBuilder.BuildWalls();
+            mapBuilder.ClearSafeZone();
+            mapBuilder.SpawnEnemies(3);
+
+            _map = mapBuilder.GetMap();
             _map.ExplosionCell += OnExplosionCell;
 
             _player = new BasePlayer(1, 1);
