@@ -7,6 +7,8 @@ using Bomberman.Core.Enums;
 using Bomberman.Core.GameLogic;
 using Bomberman.Core.Patterns.Creational;
 using Bomberman.Core.Patterns.Creational.Builder;
+using Bomberman.Core.Patterns.Structural.Adapter;
+using Bomberman.UI.Patterns.Structural.Adapter;
 using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
 using Bomberman.Services.Network;
@@ -27,7 +29,6 @@ namespace Bomberman.UI.Scenes
         private IPlayer _player;
         private bool _isPlayerAlive = true;
 
-        private readonly List<Bomb> _bombs = new();
         private KeyboardState _previousKeyboardState;
         private readonly string _username = "Player1";
 
@@ -145,9 +146,11 @@ namespace Bomberman.UI.Scenes
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             // ============================
-            // OYUNCU HAREKETİ
+            // OYUNCU HAREKETİ (ADAPTER PATTERN)
             // ============================
-            var (deltaX, deltaY, _) = InputController.GetCurrentInput();
+            // Dependency Injection ideali, ama şimdilik burada oluşturuyoruz.
+            IInputService inputService = new KeyboardInputAdapter();
+            var (deltaX, deltaY, _) = inputService.GetInput();
 
             if (deltaX != 0 || deltaY != 0)
             {
@@ -184,13 +187,19 @@ namespace Bomberman.UI.Scenes
             // ============================
             // BOMBALAR
             // ============================
-            foreach (var bomb in _bombs)
+            // ============================
+            // BOMBALAR
+            // ============================
+            // Iterate backwards or separate list to avoid modification errors if needed, 
+            // but Update doesn't remove bombs usually.
+            // GameMap.Bombs is a List.
+            foreach (var bomb in _map.Bombs)
             {
                 bomb.Update(dt);
 
                 if (!bomb.IsExploded && bomb.TimeRemaining <= 0)
                 {
-                    bomb.Explode(); // → GameMap + GameView + Enemies observer olarak tetikleniyor
+                    bomb.Explode(); 
                 }
             }
 
@@ -219,7 +228,7 @@ namespace Bomberman.UI.Scenes
             if (currentKeyboardState.IsKeyDown(Keys.Space) &&
                 !_previousKeyboardState.IsKeyDown(Keys.Space))
             {
-                int activeBombs = _bombs.Count(b => !b.IsExploded);
+                int activeBombs = _map.Bombs.Count(b => !b.IsExploded);
                 int maxBombs = _player.GetMaxBombCount();
 
                 if (activeBombs < maxBombs)
@@ -269,14 +278,14 @@ namespace Bomberman.UI.Scenes
             };
 
             var bomb = new Bomb(bombX, bombY, power);
-
+            
             // Observer pattern
             bomb.Attach(_map);        // → IExplosionObserver: OnExplosion
             bomb.Attach(Game.GameView);
             foreach (var enemy in _map.Enemies)
                 bomb.Attach(enemy);
 
-            _bombs.Add(bomb);
+            _map.Bombs.Add(bomb); // Add to map instead of local list
 
             Task.Run(() => Game.GameClient.PlaceBombAsync(bombDto));
         }
@@ -364,7 +373,7 @@ namespace Bomberman.UI.Scenes
             _player = new BasePlayer(1, 1);
             _isPlayerAlive = true;
 
-            _bombs.Clear();
+            _map.Bombs.Clear();
             Game.GameView.ClearExplosions();
         }
 
@@ -380,7 +389,7 @@ namespace Bomberman.UI.Scenes
 
             Game.GraphicsDevice.Clear(bgColor);
 
-            Game.GameView.DrawGame(_map, _player, _bombs);
+            Game.GameView.DrawGame(_map, _player, _map.Bombs);
 
             if (!_isPlayerAlive)
             {

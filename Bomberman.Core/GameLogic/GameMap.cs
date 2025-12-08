@@ -8,6 +8,7 @@ using Bomberman.Core.Entities;
 using Bomberman.Core.Factories;
 using Bomberman.Core.Patterns.Behavioral.Observer;
 using Bomberman.Core.Patterns.Creational;
+using System.Linq; // For Any()
 
 namespace Bomberman.Core.GameLogic
 {
@@ -17,6 +18,7 @@ namespace Bomberman.Core.GameLogic
         public int Height { get; }
         public Wall[,] Walls { get; }
         public List<Enemy> Enemies { get; } = new();
+        public List<Bomb> Bombs { get; } = new();
         public List<PowerUp> PowerUps { get; } = new();
 
         private readonly Random _rng = new();
@@ -136,18 +138,24 @@ namespace Bomberman.Core.GameLogic
 
         public bool CheckCollision(double x, double y, double size = 0.55)
         {
-            // Check 4 corners of the bounding box
+            // 4 corners of the bounding box
             double half = size / 2.0;
-            
-            // Top-Left
-            if (IsWallAt(x - half, y - half)) return true;
-            // Top-Right
-            if (IsWallAt(x + half, y - half)) return true;
-            // Bottom-Left
-            if (IsWallAt(x - half, y + half)) return true;
-            // Bottom-Right
-            if (IsWallAt(x + half, y + half)) return true;
-            
+
+            // Coordinates to check
+            var corners = new[]
+            {
+                (x - half, y - half),
+                (x + half, y - half),
+                (x - half, y + half),
+                (x + half, y + half)
+            };
+
+            foreach (var (cx, cy) in corners)
+            {
+                // 1. Check strict Walls
+                if (IsWallAt(cx, cy)) return true;
+            }
+
             return false;
         }
 
