@@ -47,6 +47,20 @@ namespace Bomberman.Core.GameLogic
             Enemies.Add(enemy);
         }
 
+        public void UpdateEnemies(IPlayer p1, IPlayer p2)
+        {
+            foreach (var enemy in Enemies)
+            {
+                IPlayer target = p1; // Default
+                
+                if (enemy.TargetPlayerIndex == 1) target = p1;
+                else if (enemy.TargetPlayerIndex == 2 && p2 != null) target = p2;
+                // else if 0 -> could calculate closest distance, but keeping simple for now (P1 default)
+
+                enemy.Update(this, target);
+            }
+        }
+
         // ============================================================
         // 4) TEK HÜCREYE PATLAMA ETKİSİ
         // ============================================================
@@ -91,6 +105,10 @@ namespace Bomberman.Core.GameLogic
         // 5) DUVAR KIRMA
         // ============================================================
 
+        // Flag to control if this client authorizes powerups (Host only)
+        public bool ShouldSpawnPowerUps { get; set; } = false;
+        public event Action<PowerUp> OnPowerUpSpawned;
+
         public void RemoveWall(int x, int y)
         {
             if (IsOutsideBounds(x, y))
@@ -103,8 +121,16 @@ namespace Bomberman.Core.GameLogic
             if (!wall.CanBeDestroyed())
                 return;
 
-            if (_rng.NextDouble() < GameConfig.Instance.PowerUpDropRate)
-                PowerUps.Add(PowerUpFactory.CreateRandomPowerUp(x, y));
+            // Only spawn if authorized (Host) OR logic allows.
+            // Actually, Host spawns and broadcasts. 
+            // Remote clients simply RemoveWall without spawning logic here, 
+            // and add powerups via OnRemotePowerUpSpawned.
+            if (ShouldSpawnPowerUps && _rng.NextDouble() < GameConfig.Instance.PowerUpDropRate)
+            {
+                var pu = PowerUpFactory.CreateRandomPowerUp(x, y);
+                PowerUps.Add(pu);
+                OnPowerUpSpawned?.Invoke(pu);
+            }
 
             Walls[y, x] = null;
         }

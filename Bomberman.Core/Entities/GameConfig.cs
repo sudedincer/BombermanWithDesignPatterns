@@ -26,6 +26,11 @@ namespace Bomberman.Core.Config
         public int HardWallHits { get; set; }
 
         // Global random (oyunda tek RNG)
-        public Random Rng { get; } = new Random();
+        public Random Rng { get; private set; } = new Random();
+
+        public void SetSeed(int seed)
+        {
+            Rng = new Random(seed);
+        }
     }
 }

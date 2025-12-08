@@ -28,7 +28,10 @@ namespace Bomberman.UI.Scenes
         private GameMap _map;
         private IPlayer _player;
         private bool _isPlayerAlive = true;
-
+        private bool _isVictory = false; // New Victory State
+        
+        // Bomb & Input Logic
+        private float _bombCooldownTimer = 0f;
         private KeyboardState _previousKeyboardState;
         private readonly string _username = "Player1";
 
@@ -38,35 +41,61 @@ namespace Bomberman.UI.Scenes
         // UI Constants
         private Rectangle _restartBtnRect;
         private Rectangle _lobbyBtnRect;
+        private int _playerIndex; // Store locally for Drawing logic
 
-        public GameScene(Game1 game, ThemeType selectedTheme) : base(game)
+        public GameScene(Game1 game, ThemeType selectedTheme, int? seed = null, int playerIndex = 1) : base(game)
         {
             _theme = selectedTheme;
-
+            _playerIndex = playerIndex;
+            
             // 1) Font
             _font = Game.Content.Load<SpriteFont>("Fonts/DefaultFont");
 
-            // 2) Tema'ya göre wall factory
+            // 2) Wall Factory
             IWallFactory factory = WallFactory.Create(_theme);
 
             // 3) Map + Player (Using Builder Pattern)
             ClassicMapBuilder mapBuilder = new ClassicMapBuilder();
+            // If Seed provided (Multiplayer), set it
+            if (seed.HasValue)
+                mapBuilder = new ClassicMapBuilder(seed.Value);
+
             mapBuilder.SetDimensions(Game.MapWidth, Game.MapHeight);
             mapBuilder.SetTheme(factory);
             
             mapBuilder.BuildWalls();
-            mapBuilder.ClearSafeZone();
-            mapBuilder.SpawnEnemies(3); // count not strictly used by ClassicBuilder yet but good practice
-
-            _map = mapBuilder.GetMap();
+            mapBuilder.ClearSafeZone(); // Clears both corners 
+            mapBuilder.SpawnEnemies(3); 
             
-            _player = new BasePlayer(1, 1);
-            _isPlayerAlive = true;
-
-            // 4) Patlama event → görsel + kill
+            _map = mapBuilder.GetMap();
             _map.ExplosionCell += OnExplosionCell;
 
-            // 5) Tema'ya göre duvar atlası
+            // 4) Initialize Players (P1: Top-Left, P2: Bottom-Right)
+            int p1X = 1; 
+            int p1Y = 1;
+            int p2X = Game.MapWidth - 2; 
+            int p2Y = Game.MapHeight - 2;
+
+            if (playerIndex == 1)
+            {
+                _player = new BasePlayer(p1X, p1Y);
+            }
+            else
+            {
+                _player = new BasePlayer(p2X, p2Y);
+            }
+            
+            // 5) Register Multiplayer Listeners if Online
+            if (seed.HasValue) // Only valid if multiplayer
+            {
+                 RegisterMultiplayerEvents();
+                 // Initialize Remote Player at opposite position
+                 int remoteX = (playerIndex == 1) ? p2X : p1X;
+                 int remoteY = (playerIndex == 1) ? p2Y : p1Y;
+                 _remotePlayer = new BasePlayer(remoteX, remoteY);
+            }
+
+            // 6) Load Wall Textures based on Theme
             if (_theme == ThemeType.Desert)
             {
                 var t1 = Game.Content.Load<Texture2D>("Textures/desert_unbreakable");
@@ -91,7 +120,143 @@ namespace Bomberman.UI.Scenes
                 var t4 = Game.Content.Load<Texture2D>("Textures/city_breakable");
                 Game.GameView.SetWallTextures(t1, t2, t3, t4);
             }
+            Game.GameView.SetExplosionTexture(Game.Content.Load<Texture2D>("Textures/explosion"));
+            
+            Game.GameView.SetPlayerTexture(Game.Content.Load<Texture2D>("Textures/player"));
+            Game.GameView.SetPlayer2Texture(Game.Content.Load<Texture2D>("Textures/player2"));
+
+            Game.GameView.SetBombTexture(Game.Content.Load<Texture2D>("Textures/bomb"));
+            Game.GameView.SetPowerUpTexture(Game.Content.Load<Texture2D>("Textures/powerups"));
+
+            var enemies = new List<Texture2D>
+            {
+                Game.Content.Load<Texture2D>("Textures/enemy"),
+                Game.Content.Load<Texture2D>("Textures/enemy2"),
+                Game.Content.Load<Texture2D>("Textures/enemy3")
+            };
+            Game.GameView.SetEnemyTextures(enemies);
         }
+
+        private IPlayer _remotePlayer; // Simple visualization
+        
+        private void RegisterMultiplayerEvents()
+        {
+            Game.GameClient.PlayerMoved += OnRemotePlayerMoved;
+            Game.GameClient.ExplosionReceived += OnRemoteExplosion; // Still keep for explosion effects
+            Game.GameClient.PlayerEliminated += OnPlayerEliminated;
+            
+            Game.GameClient.BombPlaced += OnRemoteBombPlaced;
+            Game.GameClient.EnemyMoved += OnRemoteEnemyMoved;
+            
+            Game.GameClient.PowerUpSpawned += OnRemotePowerUpSpawned;
+            Game.GameClient.PowerUpCollected += OnRemotePowerUpCollected;
+
+            // Map Logic
+            if (_playerIndex == 1) // Host Logic
+            {
+                _map.ShouldSpawnPowerUps = true;
+                _map.OnPowerUpSpawned += (pu) =>
+                {
+                    Game.GameClient.SpawnPowerUpAsync(new Shared.DTOs.PowerUpDTO
+                    {
+                        X = pu.X,
+                        Y = pu.Y,
+                        Type = pu.Type.ToString()
+                    });
+                };
+            }
+        }
+
+        private void OnRemotePowerUpSpawned(Shared.DTOs.PowerUpDTO dto)
+        {
+            // Only non-hosts need to add it, but for safety (and ensuring identical ID/State), 
+            // maybe validation is needed. For now, trust the server.
+            // If Host receives loopback, it might duplicate?
+            // "Clients.Others" usually prevents loopback.
+            // So P2 receives it. P2 adds it.
+            // P1 added it locally in RemoveWall.
+            
+            // Check if exists?
+            if (!_map.PowerUps.Any(p => p.X == dto.X && p.Y == dto.Y))
+            {
+                // Parse Type
+                Bomberman.Core.Enums.PowerUpType type = Enum.Parse<Bomberman.Core.Enums.PowerUpType>(dto.Type);
+                var pu = Bomberman.Core.PowerUps.PowerUpFactory.CreatePowerUp(dto.X, dto.Y, type);
+                _map.PowerUps.Add(pu);
+            }
+        }
+
+        private void OnRemotePowerUpCollected(Shared.DTOs.PowerUpDTO dto)
+        {
+            var pu = _map.PowerUps.FirstOrDefault(p => p.X == dto.X && p.Y == dto.Y);
+            if (pu != null)
+            {
+                pu.Collected = true; // or remove from list
+                // _map.PowerUps.Remove(pu); // CheckPowerUpPickup usually does collection logic
+            }
+        }
+
+        private void OnPlayerEliminated(string username)
+        {
+            // If someone else died, I win! (Assuming 2 players)
+            // Ideally check if username != MyUsername, but we don't store MyUsername locally well yet.
+            // But ReportDeath is sent by the dying client.
+            // So if I receive this, and I am alive, it's Victory.
+            
+            if (_isPlayerAlive) 
+            {
+                _isVictory = true;
+                _isPlayerAlive = false; // Stop game logic (Technical "End State", but visually Victory)
+                // Actually, keeping _isPlayerAlive=false stops updates, so it's a good "Game Over" flag.
+                // But we need to distinguish Victory vs Defeat in Draw.
+            }
+        }
+
+        private void OnRemotePlayerMoved(PlayerStateDTO state)
+        {
+            // If username is mine, ignore (loopback protection)
+            // But we don't have unique IDs yet, so rely on different connection or "Remote" flag
+            // For now, let's assume valid remote update.
+            // Initialize remote player if null
+            if (_remotePlayer == null)
+            {
+                 var rp = new BasePlayer(state.X, state.Y);
+                 _remotePlayer = rp;
+            }
+            
+            // Cast to BasePlayer/Concrete to set position directly if interface doesn't support it
+            // BasePlayer has SetPosition? We need to check or add it.
+            // Refactored BasePlayer has SetPosition(bx, by)
+            // Cast to BasePlayer/Concrete to set position directly if interface doesn't support it
+            // BasePlayer has SetPosition? We need to check or add it.
+            // Refactored BasePlayer has SetPosition(bx, by)
+            if (_remotePlayer is BasePlayer bp)
+            {
+                bp.SetPosition(state.X, state.Y);
+            }
+            else if (_remotePlayer is PlayerDecorator dec && dec is IPlayer inner)
+            {
+                 // Complex decoding if we really use decorators on remote. 
+                 // For now assumes simple BasePlayer.
+            }
+        }
+
+        private void OnRemoteExplosion(int x, int y, int power)
+        {
+             // 1. Find the bomb at these coordinates (visual removal)
+             var bomb = _map.Bombs.FirstOrDefault(b => b.X == x && b.Y == y && !b.IsExploded);
+             if (bomb != null)
+             {
+                 bomb.IsExploded = true;
+                 // Ideally trigger its local OnExplode observers if needed, 
+                 // but _map.OnExplosion handles the logic below.
+             }
+
+             // 2. Trigger Logic (Damage walls, kill players)
+             _map.OnExplosion(x, y, power);
+        }
+
+
 
         private void OnExplosionCell(int x, int y)
         {
@@ -165,57 +330,77 @@ namespace Bomberman.UI.Scenes
 
                 if (!_map.IsWallAt(targetX, targetY))
                 {
+                    // Apply movement locally
                     _player.Move(moveX, moveY, _map);
-                    CheckPowerUpPickup();
-                    CheckPlayerEnemyCollision();
                 }
-
-                var newPos = _player.GetPosition();
-
-                var playerState = new PlayerStateDTO
-                {
-                    Username = _username,
-                    X = newPos.X,
-                    Y = newPos.Y,
-                    IsAlive = _isPlayerAlive
-                };
-
-                // network tarafı
-                Task.Run(() => Game.GameClient.SendMovementAsync(playerState));
             }
 
+            if (_isPlayerAlive && !_isVictory)
+            {
+                // HOST (Player 1) controls Enemies
+                if (_playerIndex == 1)
+                {
+                    _map.UpdateEnemies(_player, _remotePlayer);
+                    
+                    // Broadcast Enemy Movements
+                    foreach (var enemy in _map.Enemies)
+                    {
+                        if (enemy.IsAlive) 
+                        {
+                            Game.GameClient.MoveEnemyAsync(new Shared.DTOs.EnemyMovementDTO
+                            {
+                                EnemyId = enemy.VisualId,
+                                X = enemy.X,
+                                Y = enemy.Y
+                            });
+                        }
+                    }
+                }
+                
+                // EVERYONE updates local state (Movements, etc)
+                double playerDelta = gameTime.ElapsedGameTime.TotalSeconds;
+                _player.Update(playerDelta);
+                
+                CheckPowerUpPickup();
+                
+                // Check collisions 
+                CheckPlayerEnemyCollision();
+            // End of Input Block
+            
+            // Network Update of Player Position
+            var newPos = _player.GetPosition();
+            var playerState = new PlayerStateDTO
+            {
+                Username = _username,
+                X = newPos.X,
+                Y = newPos.Y,
+                IsAlive = _isPlayerAlive
+            };
+
+            Task.Run(() => Game.GameClient.SendMovementAsync(playerState));
+
             // ============================
             // BOMBALAR
             // ============================
-            // ============================
-            // BOMBALAR
-            // ============================
-            // Iterate backwards or separate list to avoid modification errors if needed, 
-            // but Update doesn't remove bombs usually.
-            // GameMap.Bombs is a List.
             foreach (var bomb in _map.Bombs)
             {
                 bomb.Update(dt);
 
-                if (!bomb.IsExploded && bomb.TimeRemaining <= 0)
+                // Only explode LOCAL bombs automatically (timer).
+                // Remote bombs wait for server signal "OnExplosion".
+                // FIX: To prevent double-damage on HardWalls (Local + Server),
+                // we now wait for Server signal for ALL bombs (Local & Remote).
+                /*
+                if (!bomb.IsRemote && !bomb.IsExploded && bomb.TimeRemaining <= 0)
                 {
                     bomb.Explode(); 
                 }
+                */
             }
 
             // ============================
-            // ENEMY UPDATE
+            // PLAYER DECORATOR SÜRELERİ (Expiry Check)
             // ============================
-            foreach (var enemy in _map.Enemies)
-            {
-                enemy.Update(_map, _player);
-            }
-
-            // ============================
-            // PLAYER UPDATE + DECORATOR SÜRELERİ
-            // ============================
-            _player.Update(dt);
-
             if (_player is TimedPlayerDecorator timed && timed.IsExpired)
             {
                 timed.RevertEffect();
@@ -242,6 +427,7 @@ namespace Bomberman.UI.Scenes
             Game.GameView.Update(gameTime);
             _previousKeyboardState = currentKeyboardState;
             _previousMouseState = mouseState;
+        }
         }
 
         private void SetupGameOverLayout()
@@ -303,22 +489,34 @@ namespace Bomberman.UI.Scenes
                 {
                     _player = p.Apply(_player);
                     p.Collected = true;
+
+                    // Notify Server
+                    Game.GameClient.CollectPowerUpAsync(new Shared.DTOs.PowerUpDTO
+                    {
+                        X = p.X,
+                        Y = p.Y,
+                        Type = p.Type.ToString()
+                    });
                 }
             }
         }
 
-        private void KillPlayerAt(int x, int y)
+        private async void KillPlayerAt(int x, int y)
         {
-            if (!_isPlayerAlive)
-                return;
+            // Simple center check.
+            int px = (int)Math.Floor(_player.GetPosition().X + 0.5);
+            int py = (int)Math.Floor(_player.GetPosition().Y + 0.5);
 
-            int px = (int)Math.Round(_player.GetPosition().X);
-            int py = (int)Math.Round(_player.GetPosition().Y);
-
-            if (px == x && py == y)
+            if (_isPlayerAlive && px == x && py == y)
             {
                 _isPlayerAlive = false;
-                Console.WriteLine($"[DEBUG] Player died in explosion at ({x},{y})");
+                _isVictory = false; // Explicit defeat
+                // Report to Server
+                 await Game.GameClient.ReportDeathAsync("Me"); 
+                 // We send "Me" or generated username if we had it. 
+                 // Server broadcasts "Me" (or whatever). 
+                 // Since we don't have unique IDs, this is a bit loose but works for 1v1.
+                 // Ideally Game1 should store Username.
             }
         }
 
@@ -379,19 +577,11 @@ namespace Bomberman.UI.Scenes
 
         public override void Draw(GameTime gameTime)
         {
-            Color bgColor = _theme switch
-            {
-                ThemeType.Desert => Color.NavajoWhite, // Sand color
-                ThemeType.Forest => Color.DarkSeaGreen, // Softer green
-                ThemeType.City   => Color.Gray,
-                _ => Color.CornflowerBlue
-            };
+            Game.GraphicsDevice.Clear(new Color(30, 30, 35));
 
-            Game.GraphicsDevice.Clear(bgColor);
+            Game.GameView.DrawGame(_map, _player, _remotePlayer, _playerIndex, _map.Bombs);
 
-            Game.GameView.DrawGame(_map, _player, _map.Bombs);
-
-            if (!_isPlayerAlive)
+            if (!_isPlayerAlive || _isVictory)
             {
                 DrawGameOverOverlay();
             }
@@ -408,7 +598,10 @@ namespace Bomberman.UI.Scenes
             SpriteBatch.Draw(Game.Pixel, full, Color.Black * 0.75f);
 
             // === TITLE ===
-            string title = "GAME OVER";
+            // === TITLE ===
+            string title = _isVictory ? "VICTORY!" : "DEFEAT";
+            Color titleColor = _isVictory ? Color.Gold : Color.Crimson;
+
             Vector2 titleSize = _font.MeasureString(title);
             Vector2 titlePos = new Vector2(
                 (vp.Width - titleSize.X * 3f) / 2, // 3x scale calculation
@@ -417,7 +610,7 @@ namespace Bomberman.UI.Scenes
             // Shadow text
             SpriteBatch.DrawString(_font, title, titlePos + new Vector2(4, 4), Color.Black * 0.5f, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0f);
             // Main text
-            SpriteBatch.DrawString(_font, title, titlePos, Color.Crimson, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0f);
+            SpriteBatch.DrawString(_font, title, titlePos, titleColor, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0f);
 
             // === BUTTONS ===
             Point mousePos = Mouse.GetState().Position;
@@ -463,6 +656,36 @@ namespace Bomberman.UI.Scenes
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Y, thickness, r.Height), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.Right - thickness, r.Y, thickness, r.Height), color);
+        }
+
+        private void OnRemoteBombPlaced(Shared.BombDTO dto)
+        {
+             // Create visual bomb entity
+             var bomb = new Bomb(dto.X, dto.Y, dto.Power);
+             bomb.Attach(Game.GameView); 
+             bomb.IsRemote = true; // Mark as remote so it doesn't self-destruct locally
+             
+             // Note: We don't attach Map/Enemies here because explosion logic is also synchronized via "ExplosionReceived"
+             // or we can let the server drive explosions.
+             // Currently ExplosionReceived handles the blast.
+             // But we need to add to _map.Bombs so it gets drawn.
+             _map.Bombs.Add(bomb);
+        }
+
+        private void OnRemoteEnemyMoved(Shared.DTOs.EnemyMovementDTO dto)
+        {
+            // Find enemy by VisualId
+            var enemy = _map.Enemies.FirstOrDefault(e => e.VisualId == dto.EnemyId);
+            if (enemy != null)
+            {
+                // Snap position (Simple sync)
+                // Since setter is private/or we need a method.
+                // Enemy properties X/Y have private setters.
+                // We might need to add a method 'SetPosition' to Enemy class or use Reflection.
+                // Let's check Enemy class. It likely has private setters.
+                // Assuming we need to add SetPosition to Enemy.
+                enemy.SetPosition(dto.X, dto.Y); 
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
-public enum EnemyType
+namespace Bomberman.Core.Enums
 {
-    RandomWalker,
-    Static,
-    Chaser
+    public enum EnemyType
+    {
+        RandomWalker,
+        Static,
+        Chaser
+    }
 }

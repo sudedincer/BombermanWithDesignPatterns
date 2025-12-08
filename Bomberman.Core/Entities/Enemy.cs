@@ -12,6 +12,14 @@ namespace Bomberman.Core.Entities
         private static int _globalIdCounter = 0;
         public int VisualId { get; } = System.Threading.Interlocked.Increment(ref _globalIdCounter);
         public bool IsAlive { get; set; } = true;
+        public int TargetPlayerIndex { get; set; } = 0; // 0=Closest/Default, 1=P1, 2=P2
+        public EnemyType Type { get; set; }
+
+        public void SetPosition(double x, double y)
+        {
+            X = x;
+            Y = y;
+        }
 
         public double Speed { get; set; } = 0.2; // Slower speed (was 0.5)
         public Direction Direction { get; set; } = Direction.Right;

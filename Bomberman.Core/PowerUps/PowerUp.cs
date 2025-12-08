@@ -9,6 +9,7 @@ namespace Bomberman.Core.PowerUps
         public int Y { get; }
         public bool Collected { get; set; }
         public float Duration { get; protected set; } = 10f; // 10 saniye
+        public abstract Bomberman.Core.Enums.PowerUpType Type { get; }
 
 
         protected PowerUp(int x, int y)

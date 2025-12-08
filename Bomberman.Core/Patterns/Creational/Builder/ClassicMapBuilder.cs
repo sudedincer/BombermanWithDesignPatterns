@@ -1,4 +1,6 @@
 using System;
+using Bomberman.Core.Config;
+using Bomberman.Core.Entities;
 using Bomberman.Core.GameLogic;
 using Bomberman.Core.Factories;
 using Bomberman.Core.Enums;
@@ -12,7 +14,18 @@ namespace Bomberman.Core.Patterns.Creational.Builder
         private int _width;
         private int _height;
         private IWallFactory _factory;
-        private readonly Random _rng = new();
+        // private readonly Random _rng; // Use GameConfig.Rng
+
+        public ClassicMapBuilder(int seed)
+        {
+            Bomberman.Core.Config.GameConfig.Instance.SetSeed(seed);
+        }
+
+        public ClassicMapBuilder()
+        {
+            // Default seed (Time-based / Random)
+            Bomberman.Core.Config.GameConfig.Instance.SetSeed(new Random().Next());
+        }
 
         public void SetDimensions(int width, int height)
         {
@@ -51,7 +64,7 @@ namespace Bomberman.Core.Patterns.Creational.Builder
                     }
 
                     // Random Hard Walls (10%)
-                    if (_rng.Next(100) < 10)
+                    if (Bomberman.Core.Config.GameConfig.Instance.Rng.Next(100) < 10)
                     {
                         var wall = _factory.CreateWall(WallType.Hard, x, y, _map);
                         _map.SetWall(x, y, wall);
@@ -59,7 +72,7 @@ namespace Bomberman.Core.Patterns.Creational.Builder
                     }
 
                     // Random Breakable Walls (40%)
-                    if (_rng.Next(100) < 40)
+                    if (Bomberman.Core.Config.GameConfig.Instance.Rng.Next(100) < 40)
                     {
                         var wall = _factory.CreateWall(WallType.Breakable, x, y, _map);
                         _map.SetWall(x, y, wall);
@@ -73,43 +86,49 @@ namespace Bomberman.Core.Patterns.Creational.Builder
         {
             // Clear standard top-left start area (3x3 grid from 1,1)
             for (int y = 1; y <= 3; y++)
-            {
-                for (int x = 1; x <= 3; x++)
-                {
-                    Wall wall = _map.GetWallAt(x, y);
-                    // Don't remove Unbreakable (Grid/Border) walls
-                    if (!(wall is UnbreakableWall))
-                    {
-                        // Set to null (remove wall)
-                        _map.SetWall(x, y, null);
-                    }
-                }
-            }
+            // Clear Top-Left (1,1) -> (2,1), (1,2)
+            _map.SetWall(1, 1, null);
+            _map.SetWall(1, 2, null);
+            _map.SetWall(2, 1, null);
+
+            // Clear Bottom-Right (W-2, H-2) -> (W-3, H-2), (W-2, H-3)
+            int w = _width - 2;
+            int h = _height - 2;
+            _map.SetWall(w, h, null);
+            _map.SetWall(w, h - 1, null);
+            _map.SetWall(w - 1, h, null);
         }
 
         public void SpawnEnemies(int count)
         {
-            // For now, adhere to classic logic which spawns specific types rather than just 'count'
-            // We can adapt 'count' later if needed or ignore it for strict classic rules
-            
+            // SPECIFIC CHALLENGE: Dual Chasing Enemies
+            // 1. Chaser for Player 1
+            var chaser1 = SpawnEnemy(EnemyType.Chaser);
+            if (chaser1 != null) chaser1.TargetPlayerIndex = 1;
+
+            // 2. Chaser for Player 2
+            var chaser2 = SpawnEnemy(EnemyType.Chaser);
+            if (chaser2 != null) chaser2.TargetPlayerIndex = 2;
+
+            // 3. Filler Enemies
             SpawnEnemy(EnemyType.RandomWalker);
             SpawnEnemy(EnemyType.Static);
-            SpawnEnemy(EnemyType.Chaser);
         }
         
-        private void SpawnEnemy(EnemyType type)
+        private Enemy? SpawnEnemy(EnemyType type)
         {
             while (true)
             {
-                int x = _rng.Next(1, _width - 1);
-                int y = _rng.Next(1, _height - 1);
+                int x = Bomberman.Core.Config.GameConfig.Instance.Rng.Next(1, _width - 1);
+                int y = Bomberman.Core.Config.GameConfig.Instance.Rng.Next(1, _height - 1);
 
                 // Use the map's collision check (which now checks center) or simple IsWallAt
                 // Since spawning happens on Integer coordinates, IsWallAt works fine if using Floor logic we fixed
                 if (!_map.IsWallAt(x, y))
                 {
-                    _map.AddEnemy(EnemyFactory.CreateEnemy(x, y, type));
-                    break;
+                    var enemy = EnemyFactory.CreateEnemy(x, y, type);
+                    _map.AddEnemy(enemy);
+                    return enemy;
                 }
             }
         }

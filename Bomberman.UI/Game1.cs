@@ -38,9 +38,40 @@ namespace Bomberman.UI
             IsMouseVisible = true;
         }
 
+        public void StartGame(ThemeType theme)
+        {
+            // Fallback for single player or testing
+             SceneManager.ChangeScene(new GameScene(this, theme));
+        }
+
+        public async void JoinLobby()
+        {
+             // Random Username for now
+             string username = "Player" + new System.Random().Next(100, 999);
+             await _gameClient.JoinLobbyAsync(username);
+        }
+
         protected override void Initialize()
         {
             _gameClient = new GameClient(HUB_URL);
+            
+            // Listen for Game Start
+            _gameClient.GameStarted += (startDto) =>
+            {
+                // Must run on UI thread
+                 // MonoGame Update Loop will handle this naturally if we flag it, 
+                 // or we assume Action callbacks run on thread pool -> careful with Graphics.
+                 // For safety, we should queue this action or simpler, just switch scene (Check thread safety).
+                 // MonoGame ChangeScene is usually safe if called not during Drawing.
+                 
+                 // Map theme string to Enum
+                 ThemeType theme = ThemeType.City;
+                 if (startDto.Theme == "Desert") theme = ThemeType.Desert;
+                 if (startDto.Theme == "Forest") theme = ThemeType.Forest;
+
+                 SceneManager.ChangeScene(new GameScene(this, theme, startDto.Seed, startDto.PlayerIndex));
+            };
+
             _ = _gameClient.StartConnectionAsync();
 
             base.Initialize();
@@ -101,9 +132,6 @@ namespace Bomberman.UI
             base.Draw(gameTime);
         }
 
-        public void StartGame(ThemeType theme)
-        {
-            SceneManager.ChangeScene(new GameScene(this, theme));
-        }
+
     }
 }

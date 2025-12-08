@@ -8,8 +8,8 @@ namespace Bomberman.Core.Patterns.Behavioral.Strategy
     {
         public (double DeltaX, double DeltaY) CalculateMovement(
             Enemy enemy,
-            GameMap map,
-            IPlayer targetPlayer)
+            GameMap? map,
+            IPlayer? targetPlayer)
         {
             double step = enemy.Speed * 0.05; 
 

@@ -6,6 +6,7 @@ namespace Bomberman.Core.PowerUps
     public class BombPowerUp : PowerUp
     {
         public BombPowerUp(int x, int y) : base(x, y) {}
+        public override Bomberman.Core.Enums.PowerUpType Type => Bomberman.Core.Enums.PowerUpType.Range;
 
         protected override IPlayer OnCollect(IPlayer p)
             => new BombPowerDecorator(p,10f);

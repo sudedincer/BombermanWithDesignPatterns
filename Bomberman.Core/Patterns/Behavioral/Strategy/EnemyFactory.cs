@@ -8,20 +8,16 @@ namespace Bomberman.Core.Factories
     {
         public static Enemy CreateEnemy(double x, double y, EnemyType type)
         {
-            return type switch
+            IMovementStrategy strategy = type switch
             {
-                EnemyType.RandomWalker =>
-                    new Enemy(x, y, new RandomWalkMovement()),
-
-                EnemyType.Static =>
-                    new Enemy(x, y, new StaticMovement()),
-
-                EnemyType.Chaser =>
-                    new Enemy(x, y, new ChasingMovement()),
-
-                _ =>
-                    new Enemy(x, y, new RandomWalkMovement())
+                EnemyType.Static => new StaticMovement(),
+                EnemyType.Chaser => new ChasingMovement(),
+                _ => new RandomWalkMovement()
             };
+
+            var enemy = new Enemy(x, y, strategy);
+            enemy.Type = type;
+            return enemy;
         }
     }
 }

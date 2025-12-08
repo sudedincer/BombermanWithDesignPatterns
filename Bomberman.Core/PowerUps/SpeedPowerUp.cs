@@ -9,6 +9,7 @@ namespace Bomberman.Core.PowerUps
         {
             Duration=10f;
         }
+        public override Bomberman.Core.Enums.PowerUpType Type => Bomberman.Core.Enums.PowerUpType.Speed;
         
 
         protected override IPlayer OnCollect(IPlayer p)

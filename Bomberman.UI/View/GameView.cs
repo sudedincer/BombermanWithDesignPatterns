@@ -25,6 +25,7 @@ namespace Bomberman.UI.View
         private readonly List<(int X, int Y, float Timer)> _explosions = new();
         private List<Texture2D> _enemyTextures;
         private Texture2D _playerTexture;
+        private Texture2D _player2Texture;
         private Texture2D _bombTexture;
         private Texture2D _desertWallAtlas;
         private Rectangle[,] _desertWallRects;
@@ -61,7 +62,7 @@ namespace Bomberman.UI.View
             return texture;
         }
 
-        public void DrawGame(GameMap map, IPlayer player, List<Bomb> bombs)
+        public void DrawGame(GameMap map, IPlayer localPlayer, IPlayer remotePlayer, int localPlayerIndex, List<Bomb> bombs)
         {
             _spriteBatch.Begin();
 
@@ -71,7 +72,19 @@ namespace Bomberman.UI.View
             DrawBombs(bombs);
             DrawExplosions();
             DrawEnemies(map.Enemies);
-            DrawPlayer(player);
+
+            // Draw Players based on Index
+            // P1 = _playerTexture (Blue), P2 = _player2Texture (Red/Other)
+            
+            Texture2D localTex = (localPlayerIndex == 1) ? _playerTexture : _player2Texture;
+            DrawPlayer(localPlayer, localTex);
+
+            if (remotePlayer != null)
+            {
+                Texture2D remoteTex = (localPlayerIndex == 1) ? _player2Texture : _playerTexture;
+                // If remote is null (not connected?) handle safe
+                DrawPlayer(remotePlayer, remoteTex);
+            }
 
             _spriteBatch.End();
         }
@@ -203,9 +216,9 @@ namespace Bomberman.UI.View
              return (_pixel, new Rectangle(0,0,1,1));
         }
 
-        private void DrawPlayer(IPlayer player)
+        private void DrawPlayer(IPlayer player, Texture2D tex)
         {
-            if (_playerTexture == null)
+            if (tex == null)
                 return;
 
             var pos = player.GetPosition();
@@ -370,9 +383,27 @@ namespace Bomberman.UI.View
                 if (!e.IsAlive)
                     continue;
 
-                // Pick texture based on unique Round-Robin ID
-                int index = e.VisualId % _enemyTextures.Count;
-                var tex = _enemyTextures[index];
+                // Pick texture based on Enemy Type
+                Texture2D tex;
+
+                if (_enemyTextures.Count >= 3)
+                {
+                    tex = e.Type switch
+                    {
+                        Bomberman.Core.Enums.EnemyType.Chaser => _enemyTextures[2], // Red? (Check load order, usually 0=Green, 1=Grey, 2=Red or similar)
+                        // Actually, let's just consistently map them.
+                        // Assuming Load Order: green, gray, red.
+                        // If wrong, we can swap later.
+                        Bomberman.Core.Enums.EnemyType.Static => _enemyTextures[1],
+                        _ => _enemyTextures[0] // Random/Green
+                    };
+                }
+                else
+                {
+                    // Fallback
+                     int index = e.VisualId % _enemyTextures.Count;
+                     tex = _enemyTextures[index];
+                }
 
                 int px = (int)(e.X * _tileSize);
                 int py = (int)(e.Y * _tileSize);
@@ -391,6 +422,10 @@ namespace Bomberman.UI.View
         public void SetPlayerTexture(Texture2D tex)
         {
             _playerTexture = tex;
+        }
+        public void SetPlayer2Texture(Texture2D tex)
+        {
+            _player2Texture = tex;
         }
         public void SetBombTexture(Texture2D tex)
         {

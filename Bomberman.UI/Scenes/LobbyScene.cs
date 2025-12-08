@@ -10,6 +10,7 @@ namespace Bomberman.UI.Scenes
     {
         private SpriteFont _font;
         private ThemeType _selectedTheme = ThemeType.Desert;
+        private bool _waitingForGame = false;
 
         // UI Layout
         private Rectangle _desertCard;
@@ -97,14 +98,17 @@ namespace Bomberman.UI.Scenes
 
                 if (_startBtn.Contains(p))
                 {
-                    Game.StartGame(_selectedTheme);
+                    // Game.StartGame(_selectedTheme); // Old Logic
+                    Game.JoinLobby(); // New Multiplayer Logic
+                    _waitingForGame = true;
                 }
             }
 
             var kb = Keyboard.GetState();
             if (kb.IsKeyDown(Keys.Enter))
             {
-                Game.StartGame(_selectedTheme);
+                Game.JoinLobby();
+                _waitingForGame = true;
             }
             if (kb.IsKeyDown(Keys.Escape))
             {
@@ -150,7 +154,19 @@ namespace Bomberman.UI.Scenes
             DrawThemeCard(_cityCard,   "CITY",   _cityPreview,   _selectedTheme == ThemeType.City,   cityHover);
 
             // Start Button
-            DrawButton(_startBtn, "PLAY", startHover);
+            if (_waitingForGame)
+            {
+                string waitMsg = "Waiting for players... (1/2)";
+                Vector2 textSize = _font.MeasureString(waitMsg);
+                Vector2 pos = new Vector2(
+                    _centerPanel.Center.X - textSize.X / 2,
+                    _startBtn.Top + 10);
+                SpriteBatch.DrawString(_font, waitMsg, pos, Color.White);
+            }
+            else
+            {
+                DrawButton(_startBtn, "JOIN GAME", startHover);
+            }
 
             SpriteBatch.End();
         }

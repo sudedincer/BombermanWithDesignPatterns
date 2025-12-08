@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using System;
 using System.Threading.Tasks;
 using Shared;
+using Shared.DTOs;
 
 namespace Bomberman.Services.Network
 {
@@ -13,9 +14,19 @@ namespace Bomberman.Services.Network
         // 1. Olay Tanımlama: Sunucudan bir güncelleme geldiğinde UI/Model'i bilgilendirmek için Event kullanıyoruz.
         // Bu, Observer desenine benzer bir Publisher/Subscriber mantığı sağlar.
         public event Action<PlayerStateDTO>? PlayerMoved;
-        public event Action<BombDTO>? BombPlaced;
         //patlama geldiğinde tetiklenir
         public event Action<int, int, int>? ExplosionReceived;
+        
+        // YENİ: Lobby/GameStart Events
+        public event Action<LobbyStateDTO>? LobbyUpdated;
+        public event Action<Shared.BombDTO> BombPlaced;
+        public event Action<Shared.DTOs.EnemyMovementDTO> EnemyMoved;
+        public event Action<Shared.DTOs.PowerUpDTO> PowerUpSpawned;
+        public event Action<Shared.DTOs.PowerUpDTO> PowerUpCollected;
+        
+        private string _username;
+        public event Action<GameStartDTO>? GameStarted;
+        public event Action<string>? PlayerEliminated;
 
         public GameClient(string hubUrl)
         {
@@ -47,6 +58,41 @@ namespace Bomberman.Services.Network
                 ExplosionReceived?.Invoke(x, y, power);
                 Console.WriteLine($"Explosion at ({x}, {y}) with power {power} received.");
             });
+            
+            // LOBBY UPDATE
+            _connection.On<LobbyStateDTO>("LobbyUpdated", (lobby) =>
+            {
+                LobbyUpdated?.Invoke(lobby);
+            });
+
+            // GAME START
+            _connection.On<GameStartDTO>("GameStarted", (dto) =>
+            {
+                GameStarted?.Invoke(dto);
+            });
+
+            // ENEMY MOVED
+            _connection.On<Shared.DTOs.EnemyMovementDTO>("EnemyMoved", (dto) =>
+            {
+                EnemyMoved?.Invoke(dto);
+            });
+
+            _connection.On<Shared.DTOs.PowerUpDTO>("ReceivePowerUpSpawn", (dto) =>
+            {
+                PowerUpSpawned?.Invoke(dto);
+            });
+
+            _connection.On<Shared.DTOs.PowerUpDTO>("ReceivePowerUpCollection", (dto) =>
+            {
+                PowerUpCollected?.Invoke(dto);
+            });
+
+
+            // PLAYER ELIMINATED
+            _connection.On<string>("PlayerEliminated", (username) =>
+            {
+                PlayerEliminated?.Invoke(username);
+            });
         }
 
         public async Task StartConnectionAsync()
@@ -54,13 +100,32 @@ namespace Bomberman.Services.Network
             try
             {
                 await _connection.StartAsync();
-                Console.WriteLine("SignalR connection established.");
+                Console.WriteLine("Connected to GameHub");
             }
             catch (Exception ex)
             {
-                // Hata durumunda loglama
                 Console.WriteLine($"Connection failed: {ex.Message}");
             }
+        }
+        
+        public async Task JoinLobbyAsync(string username)
+        {
+            await _connection.InvokeAsync("JoinLobby", username);
+        }
+
+        public async Task MoveEnemyAsync(Shared.DTOs.EnemyMovementDTO dto)
+        {
+            await _connection.InvokeAsync("MoveEnemy", dto);
+        }
+
+        public async Task SpawnPowerUpAsync(Shared.DTOs.PowerUpDTO dto)
+        {
+            await _connection.InvokeAsync("SpawnPowerUp", dto);
+        }
+
+        public async Task CollectPowerUpAsync(Shared.DTOs.PowerUpDTO dto)
+        {
+            await _connection.InvokeAsync("CollectPowerUp", dto);
         }
         
         // --- CLIENT'TAN SUNUCUYA ÇAĞRILAR (OUTGOING) ---
@@ -82,6 +147,16 @@ namespace Bomberman.Services.Network
             {
                 // Hub'daki PlaceBomb metodunu çağır
                 await _connection.InvokeAsync("PlaceBomb", bomb);
+            }
+        }
+
+
+
+        public async Task ReportDeathAsync(string username)
+        {
+            if (_connection.State == HubConnectionState.Connected)
+            {
+                await _connection.InvokeAsync("ReportDeath", username);
             }
         }
     }

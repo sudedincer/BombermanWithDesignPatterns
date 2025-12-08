@@ -7,6 +7,7 @@ public class ExtraBombPowerUp : PowerUp
     {
         Duration = 10f;
     }
+    public override Bomberman.Core.Enums.PowerUpType Type => Bomberman.Core.Enums.PowerUpType.ExtraBomb;
 
 
     protected override IPlayer OnCollect(IPlayer p)

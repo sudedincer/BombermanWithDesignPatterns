@@ -25,6 +25,7 @@ namespace Bomberman.Core.Entities
         public float TimeRemaining => Math.Max(0, Lifetime - TimeSincePlaced);
 
         public bool IsExploded { get; set; } = false;
+        public bool IsRemote { get; set; } = false;
 
         public Bomb(int x, int y, int power)
         {
