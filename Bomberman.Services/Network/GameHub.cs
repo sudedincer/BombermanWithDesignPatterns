@@ -9,14 +9,18 @@ namespace Bomberman.Services.Network
     public class GameHub : Hub
     {
         private readonly ExplosionService _explosionService;
+        private readonly Bomberman.Services.Data.IUserRepository _userRepository; // Inject Repository
         
         // Static state to track players
-        private static List<string> _connectedConnectionIds = new List<string>(); // New List
+        private static List<string> _connectedConnectionIds = new List<string>(); 
+        private static Dictionary<string, string> _connectionUsernames = new Dictionary<string, string>(); // Map ID -> Username
+        private static string? _selectedTheme = null; 
         private static readonly object _lock = new();
 
-        public GameHub(ExplosionService explosionService)
+        public GameHub(ExplosionService explosionService, Bomberman.Services.Data.IUserRepository userRepository)
         {
             _explosionService = explosionService;
+            _userRepository = userRepository;
         }
 
         public override Task OnDisconnectedAsync(Exception? exception)
@@ -24,22 +28,53 @@ namespace Bomberman.Services.Network
             lock (_lock)
             {
                 _connectedConnectionIds.Remove(Context.ConnectionId);
+                _connectionUsernames.Remove(Context.ConnectionId);
             }
             return base.OnDisconnectedAsync(exception);
         }
 
-        public async Task JoinLobby(string username)
+        public async Task JoinLobby(string username, string? theme = null)
         {
+            // Database Registration / Check
+            var existingUser = await _userRepository.GetByUsernameAsync(username);
+            if (existingUser == null)
+            {
+                var newUser = new Bomberman.Services.Data.User 
+                { 
+                    Username = username,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _userRepository.AddUserAsync(newUser);
+                Console.WriteLine($"[DB] New User Registered: {username}");
+            }
+            else
+            {
+               Console.WriteLine($"[DB] Existing User Logged In: {username} (Wins: {existingUser.Wins})");
+            }
+
             int playerCount;
             bool ready = false;
+            bool isFirstPlayer = false;
 
             lock (_lock)
             {
                 if (!_connectedConnectionIds.Contains(Context.ConnectionId))
                 {
                     _connectedConnectionIds.Add(Context.ConnectionId);
+                    _connectionUsernames[Context.ConnectionId] = username;
                 }
                 playerCount = _connectedConnectionIds.Count;
+                
+                // If this is the first player and they provided a theme, store it
+                if (playerCount == 1)
+                {
+                    isFirstPlayer = true;
+                    if (!string.IsNullOrEmpty(theme))
+                    {
+                        _selectedTheme = theme;
+                        Console.WriteLine($"[SERVER] First player selected theme: {theme}");
+                    }
+                }
                 
                 if (playerCount >= 2)
                 {
@@ -49,11 +84,23 @@ namespace Bomberman.Services.Network
 
             Console.WriteLine($"[SERVER] {username} joined. ID: {Context.ConnectionId}. Total: {playerCount}");
 
-            // Broadcast Lobby Update
-            await Clients.All.SendAsync("LobbyUpdated", new LobbyStateDTO 
+            // Send personalized lobby update to the joining player
+            await Clients.Caller.SendAsync("LobbyUpdated", new LobbyStateDTO 
             { 
                 PlayerCount = playerCount, 
                 IsReady = ready,
+                IsFirstPlayer = isFirstPlayer,
+                SelectedTheme = _selectedTheme,
+                Message = isFirstPlayer ? "You are the first player. Select a theme!" : $"Waiting for game to start. Theme: {_selectedTheme ?? "Not selected"}" 
+            });
+
+            // Broadcast to others
+            await Clients.Others.SendAsync("LobbyUpdated", new LobbyStateDTO 
+            { 
+                PlayerCount = playerCount, 
+                IsReady = ready,
+                IsFirstPlayer = false,
+                SelectedTheme = _selectedTheme,
                 Message = $"{username} joined the lobby." 
             });
 
@@ -61,7 +108,7 @@ namespace Bomberman.Services.Network
             if (ready)
             {
                 int seed = new Random().Next();
-                string theme = "City"; 
+                string gameTheme = _selectedTheme ?? "Desert"; // Use selected theme or default to Desert 
 
                 Console.WriteLine($"[SERVER] Starting Game with Seed: {seed}");
 
@@ -71,7 +118,7 @@ namespace Bomberman.Services.Network
                     await Clients.Client(_connectedConnectionIds[0]).SendAsync("GameStarted", new GameStartDTO 
                     { 
                         Seed = seed, 
-                        Theme = theme,
+                        Theme = gameTheme,
                         PlayerIndex = 1 
                     });
                 }
@@ -82,25 +129,47 @@ namespace Bomberman.Services.Network
                     await Clients.Client(_connectedConnectionIds[1]).SendAsync("GameStarted", new GameStartDTO 
                     { 
                         Seed = seed, 
-                        Theme = theme,
+                        Theme = gameTheme,
                         PlayerIndex = 2
                     });
                 }
-                
-                // Clear state for next game (optional, but good for demo loop)
-                lock (_lock) { _connectedConnectionIds.Clear(); }
             }
         }
 
         public async Task ReportDeath(string username)
         {
             Console.WriteLine($"[SERVER] {username} DIED.");
+            
+            // 1. Update Loser Stats
+            await _userRepository.UpdateStatsAsync(username, isWin: false);
+            
+            // 2. Find Winner and Update Stats
+            string? winnerName = null;
+            lock (_lock)
+            {
+                // Iterate over connected players, find the one who is NOT the loser
+                foreach (var kvp in _connectionUsernames)
+                {
+                    if (kvp.Value != username)
+                    {
+                        winnerName = kvp.Value;
+                        break;
+                    }
+                }
+            }
+            
+            if (winnerName != null)
+            {
+                Console.WriteLine($"[SERVER] Winner identified: {winnerName}");
+                await _userRepository.UpdateStatsAsync(winnerName, isWin: true);
+            }
+
             await Clients.All.SendAsync("PlayerEliminated", username);
         }
 
         public async Task SendMovement(PlayerStateDTO state)
         {
-            Console.WriteLine($"[SERVER LOG] Movement from {state.Username} ({state.X}, {state.Y})");
+            // Console.WriteLine($"[SERVER LOG] Movement from {state.Username} ({state.X}, {state.Y})");
             await Clients.Others.SendAsync("ReceiveMovement", state);
         }
 
@@ -135,6 +204,21 @@ namespace Bomberman.Services.Network
         public async Task CollectPowerUp(PowerUpDTO powerUp)
         {
             await Clients.All.SendAsync("ReceivePowerUpCollection", powerUp);
+        }
+
+        public async Task RequestGameNavigation(GameNavigationDTO navigation)
+        {
+            Console.WriteLine($"[SERVER] Game Navigation Request: {navigation.Action} by {navigation.RequestedBy}");
+            
+            // If Restart, Server determines the new Seed for map synchronization
+            if (navigation.Action == "Restart")
+            {
+                navigation.Seed = new Random().Next();
+                Console.WriteLine($"[SERVER] Generated Seed for Restart: {navigation.Seed}");
+            }
+            
+            // Broadcast to ALL players (including sender) so everyone navigates together
+            await Clients.All.SendAsync("GameNavigationRequested", navigation);
         }
     }
 }

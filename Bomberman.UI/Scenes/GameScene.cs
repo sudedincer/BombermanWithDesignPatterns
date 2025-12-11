@@ -33,7 +33,7 @@ namespace Bomberman.UI.Scenes
         // Bomb & Input Logic
         private float _bombCooldownTimer = 0f;
         private KeyboardState _previousKeyboardState;
-        private readonly string _username = "Player1";
+        private readonly string _username;
 
         private SpriteFont _font;
         private MouseState _previousMouseState;
@@ -42,9 +42,11 @@ namespace Bomberman.UI.Scenes
         private Rectangle _restartBtnRect;
         private Rectangle _lobbyBtnRect;
         private int _playerIndex; // Store locally for Drawing logic
+        private Shared.DTOs.GameNavigationDTO? _pendingNavigation; // Queue for thread-safe navigation
 
-        public GameScene(Game1 game, ThemeType selectedTheme, int? seed = null, int playerIndex = 1) : base(game)
+        public GameScene(Game1 game, ThemeType selectedTheme, int? seed = null, int playerIndex = 1, string username = "Player1") : base(game)
         {
+            _username = username;
             _theme = selectedTheme;
             _playerIndex = playerIndex;
             
@@ -142,8 +144,9 @@ namespace Bomberman.UI.Scenes
         private void RegisterMultiplayerEvents()
         {
             Game.GameClient.PlayerMoved += OnRemotePlayerMoved;
-            Game.GameClient.ExplosionReceived += OnRemoteExplosion; // Still keep for explosion effects
+            Game.GameClient.ExplosionReceived += OnRemoteExplosion;
             Game.GameClient.PlayerEliminated += OnPlayerEliminated;
+            Game.GameClient.GameNavigationRequested += OnGameNavigationRequested;
             
             Game.GameClient.BombPlaced += OnRemoteBombPlaced;
             Game.GameClient.EnemyMoved += OnRemoteEnemyMoved;
@@ -151,8 +154,8 @@ namespace Bomberman.UI.Scenes
             Game.GameClient.PowerUpSpawned += OnRemotePowerUpSpawned;
             Game.GameClient.PowerUpCollected += OnRemotePowerUpCollected;
 
-            // Map Logic
-            if (_playerIndex == 1) // Host Logic
+            // Map Logic (Host Only)
+            if (_playerIndex == 1)
             {
                 _map.ShouldSpawnPowerUps = true;
                 _map.OnPowerUpSpawned += (pu) =>
@@ -165,6 +168,20 @@ namespace Bomberman.UI.Scenes
                     });
                 };
             }
+        }
+
+        private void UnregisterMultiplayerEvents()
+        {
+            Game.GameClient.PlayerMoved -= OnRemotePlayerMoved;
+            Game.GameClient.ExplosionReceived -= OnRemoteExplosion;
+            Game.GameClient.PlayerEliminated -= OnPlayerEliminated;
+            Game.GameClient.GameNavigationRequested -= OnGameNavigationRequested;
+            
+            Game.GameClient.BombPlaced -= OnRemoteBombPlaced;
+            Game.GameClient.EnemyMoved -= OnRemoteEnemyMoved;
+            
+            Game.GameClient.PowerUpSpawned -= OnRemotePowerUpSpawned;
+            Game.GameClient.PowerUpCollected -= OnRemotePowerUpCollected;
         }
 
         private void OnRemotePowerUpSpawned(Shared.DTOs.PowerUpDTO dto)
@@ -198,18 +215,44 @@ namespace Bomberman.UI.Scenes
 
         private void OnPlayerEliminated(string username)
         {
-            // If someone else died, I win! (Assuming 2 players)
-            // Ideally check if username != MyUsername, but we don't store MyUsername locally well yet.
-            // But ReportDeath is sent by the dying client.
-            // So if I receive this, and I am alive, it's Victory.
-            
-            if (_isPlayerAlive) 
+            try
             {
-                _isVictory = true;
-                _isPlayerAlive = false; // Stop game logic (Technical "End State", but visually Victory)
-                // Actually, keeping _isPlayerAlive=false stops updates, so it's a good "Game Over" flag.
-                // But we need to distinguish Victory vs Defeat in Draw.
+                Console.WriteLine($"[CLIENT] OnPlayerEliminated called. Username: {username}, MyUsername: {_username}, _isPlayerAlive: {_isPlayerAlive}");
+
+                // Logic: If someone ELSE died, I win.
+                // If *I* died, KillPlayerAt likely handled it, but this confirms.
+                
+                if (username != _username)
+                {
+                    if (_isPlayerAlive)
+                    {
+                        Console.WriteLine("[CLIENT] Someone else died and I am alive. VICTORY!");
+                        _isVictory = true;
+                        _isPlayerAlive = false; 
+                    }
+                }
+                else
+                {
+                    // I realized I died (latency or echo)
+                    if (_isPlayerAlive)
+                    {
+                        Console.WriteLine("[CLIENT] Server says I died. Accepting DEFEAT.");
+                        _isPlayerAlive = false;
+                        _isVictory = false;
+                    }
+                }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLIENT ERROR] OnPlayerEliminated failed: {ex.Message}");
+            }
+        }
+
+        private void OnGameNavigationRequested(Shared.DTOs.GameNavigationDTO dto)
+        {
+            Console.WriteLine($"[CLIENT] Navigation Request Received: {dto.Action} (Queued for Update)");
+            // Queue this to be handled in the main Update loop to avoid race conditions with RNG/Enemies
+            _pendingNavigation = dto;
         }
 
         private void OnRemotePlayerMoved(PlayerStateDTO state)
@@ -268,13 +311,37 @@ namespace Bomberman.UI.Scenes
 
         public override void Update(GameTime gameTime)
         {
+            // PROCESSS PENDING NAVIGATION (Thread-Safe)
+            if (_pendingNavigation != null)
+            {
+                var dto = _pendingNavigation;
+                _pendingNavigation = null;
+
+                if (dto.Action == "Restart")
+                {
+                    // Use the existing Restart method which handles map regeneration and seeding
+                    Restart(dto.Seed);
+                }
+                else if (dto.Action == "Lobby")
+                {
+                    UnregisterMultiplayerEvents();
+                    SceneManager.ChangeScene(new LobbyScene(Game));
+                }
+                return; // Skip rest of update frame
+            }
+
+            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
+                Game.Exit();
             KeyboardState currentKeyboardState = Keyboard.GetState();
             MouseState mouseState = Mouse.GetState();
 
             // ============================
             // GAME OVER LOGIC
             // ============================
-            if (!_isPlayerAlive)
+            // ============================
+            // GAME OVER LOGIC
+            // ============================
+            if (!_isPlayerAlive || _isVictory)
             {
                 // Calculate button positions dynamically (in case of resize)
                 SetupGameOverLayout();
@@ -285,20 +352,55 @@ namespace Bomberman.UI.Scenes
 
                 if (leftClick)
                 {
+                    Console.WriteLine($"[CLIENT DEBUG] Click at {mouseState.Position}. RestartRect: {_restartBtnRect}, LobbyRect: {_lobbyBtnRect}");
+
                     if (_restartBtnRect.Contains(mouseState.Position))
                     {
-                        Restart();
+                        Console.WriteLine("[CLIENT] Restart Button Clicked. Sending Request...");
+                        // Send navigation request to server instead of restarting directly
+                        var navDto = new Shared.DTOs.GameNavigationDTO
+                        {
+                            Action = "Restart",
+                            RequestedBy = _username
+                        };
+                        Task.Run(async () => 
+                        {
+                            try { await Game.GameClient.RequestGameNavigationAsync(navDto); }
+                            catch (Exception ex) { Console.WriteLine($"[CLIENT ERROR] Restart Request Failed: {ex.Message}"); }
+                        });
                     }
                     if (_lobbyBtnRect.Contains(mouseState.Position))
                     {
-                        SceneManager.ChangeScene(new LobbyScene(Game));
+                        Console.WriteLine("[CLIENT] Lobby Button Clicked. Sending Request...");
+                        // Send navigation request to server instead of navigating directly
+                        var navDto = new Shared.DTOs.GameNavigationDTO
+                        {
+                            Action = "Lobby",
+                            RequestedBy = _username
+                        };
+                        Task.Run(async () => 
+                        {
+                            try { await Game.GameClient.RequestGameNavigationAsync(navDto); }
+                            catch (Exception ex) { Console.WriteLine($"[CLIENT ERROR] Lobby Request Failed: {ex.Message}"); }
+                        });
                     }
                 }
 
                 // Keyboard 'R' to Restart
                 if (currentKeyboardState.IsKeyDown(Keys.R) && !_previousKeyboardState.IsKeyDown(Keys.R))
                 {
-                    Restart();
+                    Console.WriteLine("[CLIENT] R Key Pressed. Sending Restart Request...");
+                    // Send navigation request to server
+                    var navDto = new Shared.DTOs.GameNavigationDTO
+                    {
+                        Action = "Restart",
+                        RequestedBy = _username
+                    };
+                    Task.Run(async () => 
+                    {
+                        try { await Game.GameClient.RequestGameNavigationAsync(navDto); }
+                        catch (Exception ex) { Console.WriteLine($"[CLIENT ERROR] Restart Request Failed: {ex.Message}"); }
+                    });
                 }
 
                 _previousMouseState = mouseState;
@@ -503,39 +605,59 @@ namespace Bomberman.UI.Scenes
 
         private async void KillPlayerAt(int x, int y)
         {
-            // Simple center check.
-            int px = (int)Math.Floor(_player.GetPosition().X + 0.5);
-            int py = (int)Math.Floor(_player.GetPosition().Y + 0.5);
-
-            if (_isPlayerAlive && px == x && py == y)
+            try
             {
-                _isPlayerAlive = false;
-                _isVictory = false; // Explicit defeat
-                // Report to Server
-                 await Game.GameClient.ReportDeathAsync("Me"); 
-                 // We send "Me" or generated username if we had it. 
-                 // Server broadcasts "Me" (or whatever). 
-                 // Since we don't have unique IDs, this is a bit loose but works for 1v1.
-                 // Ideally Game1 should store Username.
+                // Simple center check.
+                int px = (int)Math.Floor(_player.GetPosition().X + 0.5);
+                int py = (int)Math.Floor(_player.GetPosition().Y + 0.5);
+
+                if (_isPlayerAlive && px == x && py == y)
+                {
+                    Console.WriteLine($"[CLIENT] Killed locally at ({x},{y}). Reporting death...");
+                    _isPlayerAlive = false;
+                    _isVictory = false; // Explicit defeat
+                    
+                    // Report to Server
+                    await Game.GameClient.ReportDeathAsync(_username); 
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLIENT ERROR] KillPlayerAt failed: {ex.Message}");
             }
         }
 
-        private void CheckPlayerEnemyCollision()
+        private async void CheckPlayerEnemyCollision()
         {
-            foreach (var enemy in _map.Enemies)
+            try
             {
-                int ex = (int)Math.Round(enemy.X);
-                int ey = (int)Math.Round(enemy.Y);
+                if (!_isPlayerAlive) return;
 
-                var pos = _player.GetPosition();
-                int px = (int)Math.Round(pos.X);
-                int py = (int)Math.Round(pos.Y);
+                var pPos = _player.GetPosition();
+                // Hitbox approx 40x40 relative to 64x64 tile
+                Rectangle pRect = new Rectangle((int)(pPos.X * 64) + 12, (int)(pPos.Y * 64) + 12, 40, 40);
 
-                if (px == ex && py == ey)
+                foreach (var enemy in _map.Enemies)
                 {
-                    _isPlayerAlive = false;
-                    return;
+                    if (enemy.IsAlive)
+                    {
+                         Rectangle eRect = new Rectangle((int)(enemy.X * 64) + 12, (int)(enemy.Y * 64) + 12, 40, 40);
+                         
+                         if (pRect.Intersects(eRect))
+                         {
+                             Console.WriteLine($"[CLIENT] Killed by Enemy at ({enemy.X:F1},{enemy.Y:F1}). Reporting death...");
+                             _isPlayerAlive = false;
+                             _isVictory = false;
+                             
+                             await Game.GameClient.ReportDeathAsync(_username);
+                             break;
+                         }
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLIENT ERROR] CheckPlayerEnemyCollision failed: {ex.Message}");
             }
         }
 
@@ -550,14 +672,18 @@ namespace Bomberman.UI.Scenes
                 _map.Enemies.Remove(e);
         }
 
-        private void Restart()
+        private void Restart(int? seed = null)
         {
             // Eski map event'ini bırak
             if (_map != null)
                 _map.ExplosionCell -= OnExplosionCell;
 
             IWallFactory factory = WallFactory.Create(_theme);
-            ClassicMapBuilder mapBuilder = new ClassicMapBuilder();
+            
+            // Use provided seed if available (Synced restart), otherwise random (Local/Fallback)
+            int mapSeed = seed ?? new Random().Next();
+            ClassicMapBuilder mapBuilder = new ClassicMapBuilder(mapSeed);
+            
             mapBuilder.SetDimensions(Game.MapWidth, Game.MapHeight);
             mapBuilder.SetTheme(factory);
 
@@ -568,8 +694,19 @@ namespace Bomberman.UI.Scenes
             _map = mapBuilder.GetMap();
             _map.ExplosionCell += OnExplosionCell;
 
-            _player = new BasePlayer(1, 1);
+            // Spawn at correct position based on PlayerIndex
+            if (_playerIndex == 1)
+            {
+                _player = new BasePlayer(1, 1);
+            }
+            else
+            {
+                // Player 2 spawns at bottom-right
+                _player = new BasePlayer(Game.MapWidth - 2, Game.MapHeight - 2);
+            }
+            
             _isPlayerAlive = true;
+            _isVictory = false;
 
             _map.Bombs.Clear();
             Game.GameView.ClearExplosions();
@@ -577,7 +714,21 @@ namespace Bomberman.UI.Scenes
 
         public override void Draw(GameTime gameTime)
         {
-            Game.GraphicsDevice.Clear(new Color(30, 30, 35));
+            Color bgColor;
+            switch (_theme)
+            {
+                case ThemeType.Forest:
+                    bgColor = new Color(10, 60, 40); // Dark Deep Sea Green
+                    break;
+                case ThemeType.Desert:
+                    bgColor = new Color(210, 180, 140); // Tan/Sand color
+                    break;
+                case ThemeType.City:
+                default:
+                    bgColor = new Color(30, 30, 35); // Default Dark theme
+                    break;
+            }
+            Game.GraphicsDevice.Clear(bgColor);
 
             Game.GameView.DrawGame(_map, _player, _remotePlayer, _playerIndex, _map.Bombs);
 

@@ -7,6 +7,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ExplosionService>();
+// Register Repository
+// Use a local file database
+string dbPath = Path.Combine(Environment.CurrentDirectory, "bomberman.db");
+builder.Services.AddSingleton<Bomberman.Services.Data.IUserRepository>(sp => 
+    new Bomberman.Services.Data.SqliteUserRepository(dbPath));
 
 builder.Services.AddCors(options =>
 {

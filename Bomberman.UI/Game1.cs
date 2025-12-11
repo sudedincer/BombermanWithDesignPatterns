@@ -38,17 +38,23 @@ namespace Bomberman.UI
             IsMouseVisible = true;
         }
 
+        private string _username; // Store locally
+
         public void StartGame(ThemeType theme)
         {
             // Fallback for single player or testing
-             SceneManager.ChangeScene(new GameScene(this, theme));
+             if (string.IsNullOrEmpty(_username)) _username = "Player" + new System.Random().Next(100, 999);
+             SceneManager.ChangeScene(new GameScene(this, theme, null, 1, _username));
         }
 
-        public async void JoinLobby()
+        public async void JoinLobby(string username, string? theme = null)
         {
-             // Random Username for now
-             string username = "Player" + new System.Random().Next(100, 999);
-             await _gameClient.JoinLobbyAsync(username);
+             _username = username;
+             // If empty, generate random fallback (though UI should prevent this)
+             if (string.IsNullOrWhiteSpace(_username))
+                _username = "Player" + new System.Random().Next(100, 999);
+                
+             await _gameClient.JoinLobbyAsync(_username, theme);
         }
 
         protected override void Initialize()
@@ -69,7 +75,7 @@ namespace Bomberman.UI
                  if (startDto.Theme == "Desert") theme = ThemeType.Desert;
                  if (startDto.Theme == "Forest") theme = ThemeType.Forest;
 
-                 SceneManager.ChangeScene(new GameScene(this, theme, startDto.Seed, startDto.PlayerIndex));
+                 SceneManager.ChangeScene(new GameScene(this, theme, startDto.Seed, startDto.PlayerIndex, _username));
             };
 
             _ = _gameClient.StartConnectionAsync();

@@ -11,6 +11,14 @@ namespace Bomberman.UI.Scenes
         private SpriteFont _font;
         private ThemeType _selectedTheme = ThemeType.Desert;
         private bool _waitingForGame = false;
+        private bool _isFirstPlayer = false;
+        private bool _canSelectTheme = true; // Start as true, disable for second player
+        private string _lobbyMessage = "";
+        
+        // Input
+        private string _usernameInput = "";
+        private Rectangle _inputRect;
+        private bool _isTyping = true; // Focus on start
 
         // UI Layout
         private Rectangle _desertCard;
@@ -38,10 +46,14 @@ namespace Bomberman.UI.Scenes
         public LobbyScene(Game1 game) : base(game)
         {
             _font = Game.Content.Load<SpriteFont>("Fonts/DefaultFont");
+            Game.Window.TextInput += OnTextInput; // Subscribe to text input
 
             _desertPreview = Game.Content.Load<Texture2D>("Textures/lobby_desert");
             _forestPreview = Game.Content.Load<Texture2D>("Textures/lobby_forest");
             _cityPreview   = Game.Content.Load<Texture2D>("Textures/lobby_city");
+
+            // Subscribe to lobby updates
+            Game.GameClient.LobbyUpdated += OnLobbyUpdated;
 
             SetupLayout();
         }
@@ -74,11 +86,43 @@ namespace Bomberman.UI.Scenes
 
             int btnW = 200;
             int btnH = 50;
+            
+            // Input Box above Start Button
+            _inputRect = new Rectangle(
+                (screenW - 300) / 2,
+                _centerPanel.Bottom - btnH - 100,
+                300,
+                40);
+
             _startBtn = new Rectangle(
                 (screenW - btnW) / 2,
                 _centerPanel.Bottom - btnH - 30,
                 btnW,
                 btnH);
+        }
+
+        private void OnTextInput(object sender, TextInputEventArgs e)
+        {
+            if (!_isTyping || _waitingForGame) return;
+
+            if (e.Key == Keys.Back)
+            {
+                if (_usernameInput.Length > 0)
+                    _usernameInput = _usernameInput.Substring(0, _usernameInput.Length - 1);
+            }
+            else if (e.Key == Keys.Enter)
+            {
+               // Enter handled in Update
+            }
+            else
+            {
+                // Simple filter (letters, numbers, space)
+                if (_font.Characters.Contains(e.Character))
+                {
+                    if (_usernameInput.Length < 12) // Max length
+                        _usernameInput += e.Character;
+                }
+            }
         }
 
         public override void Update(GameTime gameTime)
@@ -92,23 +136,33 @@ namespace Bomberman.UI.Scenes
 
             if (leftClicked)
             {
-                if (_desertCard.Contains(p)) _selectedTheme = ThemeType.Desert;
-                if (_forestCard.Contains(p)) _selectedTheme = ThemeType.Forest;
-                if (_cityCard.Contains(p))   _selectedTheme = ThemeType.City;
+                // Only allow theme selection if this is the first player
+                if (_canSelectTheme)
+                {
+                    if (_desertCard.Contains(p)) _selectedTheme = ThemeType.Desert;
+                    if (_forestCard.Contains(p)) _selectedTheme = ThemeType.Forest;
+                    if (_cityCard.Contains(p))   _selectedTheme = ThemeType.City;
+                }
 
                 if (_startBtn.Contains(p))
                 {
-                    // Game.StartGame(_selectedTheme); // Old Logic
-                    Game.JoinLobby(); // New Multiplayer Logic
+                    if (string.IsNullOrWhiteSpace(_usernameInput)) return; // Prevent empty join
+
+                    // Send theme if first player, otherwise send null
+                    string? themeToSend = _canSelectTheme ? _selectedTheme.ToString() : null;
+                    Game.JoinLobby(_usernameInput, themeToSend);
                     _waitingForGame = true;
+                    Game.Window.TextInput -= OnTextInput; // Unsubscribe
                 }
             }
 
             var kb = Keyboard.GetState();
-            if (kb.IsKeyDown(Keys.Enter))
+            if (kb.IsKeyDown(Keys.Enter) && !string.IsNullOrWhiteSpace(_usernameInput))
             {
-                Game.JoinLobby();
+                string? themeToSend = _canSelectTheme ? _selectedTheme.ToString() : null;
+                Game.JoinLobby(_usernameInput, themeToSend);
                 _waitingForGame = true;
+                Game.Window.TextInput -= OnTextInput;
             }
             if (kb.IsKeyDown(Keys.Escape))
             {
@@ -117,6 +171,27 @@ namespace Bomberman.UI.Scenes
 
             _hoverTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
             _prevMouse = mouse;
+        }
+
+        private void OnLobbyUpdated(Shared.LobbyStateDTO lobbyState)
+        {
+            _isFirstPlayer = lobbyState.IsFirstPlayer;
+            _lobbyMessage = lobbyState.Message;
+            
+            // If this is the second player (not first), disable theme selection
+            if (!lobbyState.IsFirstPlayer)
+            {
+                _canSelectTheme = false;
+                
+                // Update our local theme to match the first player's selection
+                if (!string.IsNullOrEmpty(lobbyState.SelectedTheme))
+                {
+                    if (Enum.TryParse<ThemeType>(lobbyState.SelectedTheme, out var theme))
+                    {
+                        _selectedTheme = theme;
+                    }
+                }
+            }
         }
 
         public override void Draw(GameTime gameTime)
@@ -148,10 +223,23 @@ namespace Bomberman.UI.Scenes
             bool cityHover   = _cityCard.Contains(mousePos);
             bool startHover  = _startBtn.Contains(mousePos);
 
-            // Cards
-            DrawThemeCard(_desertCard, "DESERT", _desertPreview, _selectedTheme == ThemeType.Desert, desertHover);
-            DrawThemeCard(_forestCard, "FOREST", _forestPreview, _selectedTheme == ThemeType.Forest, forestHover);
-            DrawThemeCard(_cityCard,   "CITY",   _cityPreview,   _selectedTheme == ThemeType.City,   cityHover);
+            // Cards - only show if can select theme
+            if (_canSelectTheme)
+            {
+                DrawThemeCard(_desertCard, "DESERT", _desertPreview, _selectedTheme == ThemeType.Desert, desertHover);
+                DrawThemeCard(_forestCard, "FOREST", _forestPreview, _selectedTheme == ThemeType.Forest, forestHover);
+                DrawThemeCard(_cityCard,   "CITY",   _cityPreview,   _selectedTheme == ThemeType.City,   cityHover);
+            }
+            else if (!_isFirstPlayer && !string.IsNullOrEmpty(_lobbyMessage))
+            {
+                // Show message for second player
+                string msg = $"Selected Theme: {_selectedTheme}";
+                Vector2 msgSize = _font.MeasureString(msg);
+                Vector2 msgPos = new Vector2(
+                    _centerPanel.Center.X - msgSize.X / 2,
+                    _centerPanel.Center.Y - msgSize.Y / 2);
+                SpriteBatch.DrawString(_font, msg, msgPos, _whiteText);
+            }
 
             // Start Button
             if (_waitingForGame)
@@ -165,6 +253,7 @@ namespace Bomberman.UI.Scenes
             }
             else
             {
+                DrawInputBox();
                 DrawButton(_startBtn, "JOIN GAME", startHover);
             }
 
@@ -231,6 +320,26 @@ namespace Bomberman.UI.Scenes
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Y, thickness, r.Height), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.Right - thickness, r.Y, thickness, r.Height), color);
+        }
+        private void DrawInputBox()
+        {
+            SpriteBatch.Draw(Game.Pixel, _inputRect, new Color(50, 50, 50));
+            DrawBorder(_inputRect, 1, Color.Gray);
+
+            string text = _usernameInput;
+            if (_isTyping && (int)(_hoverTimer * 2) % 2 == 0) text += "|"; // Cursor blink
+
+            if (string.IsNullOrEmpty(_usernameInput) && !_isTyping)
+            {
+                text = "Enter Username..."; 
+            }
+
+            Vector2 size = _font.MeasureString(text);
+            Vector2 pos = new Vector2(
+                _inputRect.X + 10,
+                _inputRect.Center.Y - size.Y / 2);
+            
+            SpriteBatch.DrawString(_font, text, pos, Color.White);
         }
     }
 }

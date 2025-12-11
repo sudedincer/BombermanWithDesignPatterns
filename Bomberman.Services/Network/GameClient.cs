@@ -27,6 +27,7 @@ namespace Bomberman.Services.Network
         private string _username;
         public event Action<GameStartDTO>? GameStarted;
         public event Action<string>? PlayerEliminated;
+        public event Action<Shared.DTOs.GameNavigationDTO>? GameNavigationRequested;
 
         public GameClient(string hubUrl)
         {
@@ -41,7 +42,7 @@ namespace Bomberman.Services.Network
             {
                 // UI'ı/Model'i güncellemesi için abone olanlara bildir
                 PlayerMoved?.Invoke(state);
-                Console.WriteLine($"Received move for {state.Username} at ({state.X:F2}, {state.Y:F2})");
+                // Console.WriteLine($"Received move for {state.Username} at ({state.X:F2}, {state.Y:F2})");
             });
             
             // BOMBA YERLEŞTİRME: Sunucu, BombDTO'yu gönderdiğinde
@@ -49,14 +50,14 @@ namespace Bomberman.Services.Network
             {
                 // UI'ı/Model'i yeni bomba hakkında bilgilendir
                 BombPlaced?.Invoke(bomb);
-                Console.WriteLine($"Received bomb placement from {bomb.PlacedByUsername} at ({bomb.X}, {bomb.Y})");
+                // Console.WriteLine($"Received bomb placement from {bomb.PlacedByUsername} at ({bomb.X}, {bomb.Y})");
             });
             // Sunucudan gelen patlama mesajını yakala
             _connection.On<int, int, int>("ReceiveExplosion", (x, y, power) =>
             {
                 // Olayı tetikle
                 ExplosionReceived?.Invoke(x, y, power);
-                Console.WriteLine($"Explosion at ({x}, {y}) with power {power} received.");
+                // Console.WriteLine($"Explosion at ({x}, {y}) with power {power} received.");
             });
             
             // LOBBY UPDATE
@@ -93,6 +94,12 @@ namespace Bomberman.Services.Network
             {
                 PlayerEliminated?.Invoke(username);
             });
+
+            // GAME NAVIGATION (Restart/Lobby)
+            _connection.On<Shared.DTOs.GameNavigationDTO>("GameNavigationRequested", (dto) =>
+            {
+                GameNavigationRequested?.Invoke(dto);
+            });
         }
 
         public async Task StartConnectionAsync()
@@ -108,9 +115,9 @@ namespace Bomberman.Services.Network
             }
         }
         
-        public async Task JoinLobbyAsync(string username)
+        public async Task JoinLobbyAsync(string username, string? theme = null)
         {
-            await _connection.InvokeAsync("JoinLobby", username);
+            await _connection.InvokeAsync("JoinLobby", username, theme);
         }
 
         public async Task MoveEnemyAsync(Shared.DTOs.EnemyMovementDTO dto)
@@ -157,6 +164,14 @@ namespace Bomberman.Services.Network
             if (_connection.State == HubConnectionState.Connected)
             {
                 await _connection.InvokeAsync("ReportDeath", username);
+            }
+        }
+
+        public async Task RequestGameNavigationAsync(Shared.DTOs.GameNavigationDTO navigation)
+        {
+            if (_connection.State == HubConnectionState.Connected)
+            {
+                await _connection.InvokeAsync("RequestGameNavigation", navigation);
             }
         }
     }
