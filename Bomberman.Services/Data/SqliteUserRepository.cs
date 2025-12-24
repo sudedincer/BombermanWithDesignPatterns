@@ -37,6 +37,22 @@ namespace Bomberman.Services.Data
                 );
             ";
             command.ExecuteNonQuery();
+
+            // Create GameHistory table
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS GameHistory (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Player1 TEXT NOT NULL,
+                    Player2 TEXT NOT NULL,
+                    Winner TEXT NOT NULL,
+                    Theme TEXT NOT NULL,
+                    Player1Kills INTEGER DEFAULT 0,
+                    Player2Kills INTEGER DEFAULT 0,
+                    PlayedAt TEXT NOT NULL,
+                    DurationSeconds INTEGER DEFAULT 0
+                );
+            ";
+            command.ExecuteNonQuery();
         }
 
         public async Task<User?> GetByUsernameAsync(string username)
@@ -171,6 +187,58 @@ namespace Bomberman.Services.Data
 
             int rowsAffected = await command.ExecuteNonQueryAsync();
             return rowsAffected > 0;
+        }
+
+        public async Task<bool> SaveGameAsync(GameHistory game)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT INTO GameHistory (Player1, Player2, Winner, Theme, Player1Kills, Player2Kills, PlayedAt, DurationSeconds)
+                VALUES (@player1, @player2, @winner, @theme, @p1kills, @p2kills, @playedAt, @duration)
+            ";
+            command.Parameters.AddWithValue("@player1", game.Player1);
+            command.Parameters.AddWithValue("@player2", game.Player2);
+            command.Parameters.AddWithValue("@winner", game.Winner);
+            command.Parameters.AddWithValue("@theme", game.Theme);
+            command.Parameters.AddWithValue("@p1kills", game.Player1Kills);
+            command.Parameters.AddWithValue("@p2kills", game.Player2Kills);
+            command.Parameters.AddWithValue("@playedAt", game.PlayedAt.ToString("o"));
+            command.Parameters.AddWithValue("@duration", game.DurationSeconds);
+
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+            return rowsAffected > 0;
+        }
+
+        public async Task<IEnumerable<GameHistory>> GetRecentGamesAsync(int count)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM GameHistory ORDER BY PlayedAt DESC LIMIT @count";
+            command.Parameters.AddWithValue("@count", count);
+
+            var games = new List<GameHistory>();
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                games.Add(new GameHistory
+                {
+                    Id = reader.GetInt32(0),
+                    Player1 = reader.GetString(1),
+                    Player2 = reader.GetString(2),
+                    Winner = reader.GetString(3),
+                    Theme = reader.GetString(4),
+                    Player1Kills = reader.GetInt32(5),
+                    Player2Kills = reader.GetInt32(6),
+                    PlayedAt = DateTime.Parse(reader.GetString(7)),
+                    DurationSeconds = reader.GetInt32(8)
+                });
+            }
+            return games;
         }
     }
 }

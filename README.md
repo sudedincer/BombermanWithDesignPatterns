@@ -105,17 +105,43 @@ This project implements **9 design patterns**, exceeding the requirement:
 
 ## 📦 Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- MonoGame dependencies (automatically restored via NuGet)
-- SQLite (included)
+### Required Software
 
-### MonoGame Runtime Dependencies (Mac)
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+- Git (for cloning the repository)
+
+### Platform-Specific Dependencies
+
+#### **macOS**
 
 ```bash
+# Install Mono framework for MonoGame
 brew install mono-libgdiplus
+
+# Verify installation
+mono --version
 ```
 
-For other platforms, see [MonoGame documentation](https://docs.monogame.net/articles/getting_started/1_setting_up_your_development_environment_ubuntu.html).
+#### **Windows**
+
+- **Visual Studio 2022** (Community Edition or higher) with:
+  - `.NET desktop development` workload
+  - `Game development with Unity` (optional, for MonoGame templates)
+  
+OR
+
+- **Visual Studio Code** with C# extension
+- Download and install [MonoGame](https://www.monogame.net/downloads/)
+
+#### **Linux (Ubuntu/Debian)**
+
+```bash
+# Install required libraries for MonoGame
+sudo apt-get update
+sudo apt-get install -y mono-complete libsdl2-dev
+```
+
+📝 **Note:** For other platforms or troubleshooting, see the [official MonoGame documentation](https://docs.monogame.net/articles/getting_started/0_getting_started.html).
 
 ---
 
@@ -359,7 +385,4 @@ This project was created as an assignment for the Object-Oriented Design Pattern
 - **SQLite** - Embedded database
 
 ---
-
-**Made with ❤️ by Sude Dincer**
-
 *For detailed pattern explanations and UML diagrams, see [DESIGN_DOCUMENT.md](DESIGN_DOCUMENT.md)*

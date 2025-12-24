@@ -9,4 +9,6 @@ public interface IUserRepository
     Task<bool> UpdateKillsAsync(string username, int killCount);
     Task<IEnumerable<User>> GetTopPlayersAsync(int count);
     Task<bool> UpdatePreferencesAsync(string username, string theme);
+    Task<bool> SaveGameAsync(GameHistory game);
+    Task<IEnumerable<GameHistory>> GetRecentGamesAsync(int count);
 }
