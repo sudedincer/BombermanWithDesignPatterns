@@ -14,6 +14,9 @@ namespace Bomberman.Services.Network
         // 1. Olay Tanımlama: Sunucudan bir güncelleme geldiğinde UI/Model'i bilgilendirmek için Event kullanıyoruz.
         // Bu, Observer desenine benzer bir Publisher/Subscriber mantığı sağlar.
         public event Action<PlayerStateDTO>? PlayerMoved;
+        
+        public bool IsConnected => _connection.State == HubConnectionState.Connected;
+
         //patlama geldiğinde tetiklenir
         public event Action<int, int, int>? ExplosionReceived;
         
@@ -173,6 +176,24 @@ namespace Bomberman.Services.Network
             {
                 await _connection.InvokeAsync("RequestGameNavigation", navigation);
             }
+        }
+
+        public async Task<bool> LoginAsync(string username, string password)
+        {
+            if (_connection.State != HubConnectionState.Connected) return false;
+            return await _connection.InvokeAsync<bool>("Login", username, password);
+        }
+
+        public async Task<bool> RegisterAsync(string username, string password)
+        {
+            if (_connection.State != HubConnectionState.Connected) return false;
+            return await _connection.InvokeAsync<bool>("Register", username, password);
+        }
+
+        public async Task<System.Collections.Generic.List<Bomberman.Services.Data.User>> GetLeaderboardAsync()
+        {
+            if (_connection.State != HubConnectionState.Connected) return new System.Collections.Generic.List<Bomberman.Services.Data.User>();
+            return await _connection.InvokeAsync<System.Collections.Generic.List<Bomberman.Services.Data.User>>("GetLeaderboard");
         }
     }
 }

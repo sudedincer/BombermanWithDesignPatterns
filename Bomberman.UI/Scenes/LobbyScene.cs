@@ -17,14 +17,15 @@ namespace Bomberman.UI.Scenes
         
         // Input
         private string _usernameInput = "";
-        private Rectangle _inputRect;
-        private bool _isTyping = true; // Focus on start
+        // private Rectangle _inputRect;
+        // private bool _isTyping = true; // Focus on start
 
         // UI Layout
         private Rectangle _desertCard;
         private Rectangle _forestCard;
         private Rectangle _cityCard;
         private Rectangle _startBtn;
+        private Rectangle _leaderboardBtn; // NEW
         private Rectangle _centerPanel;
 
         // Textures
@@ -46,7 +47,8 @@ namespace Bomberman.UI.Scenes
         public LobbyScene(Game1 game) : base(game)
         {
             _font = Game.Content.Load<SpriteFont>("Fonts/DefaultFont");
-            Game.Window.TextInput += OnTextInput; // Subscribe to text input
+            // Input handled in LoginScene now
+            // Game.Window.TextInput += OnTextInput; 
 
             _desertPreview = Game.Content.Load<Texture2D>("Textures/lobby_desert");
             _forestPreview = Game.Content.Load<Texture2D>("Textures/lobby_forest");
@@ -65,7 +67,7 @@ namespace Bomberman.UI.Scenes
 
             // Smaller, more focused panel
             int panelW = 750;
-            int panelH = 400;
+            int panelH = 460;
             _centerPanel = new Rectangle(
                 (screenW - panelW) / 2,
                 (screenH - panelH) / 2,
@@ -87,43 +89,32 @@ namespace Bomberman.UI.Scenes
             int btnW = 200;
             int btnH = 50;
             
-            // Input Box above Start Button
-            _inputRect = new Rectangle(
-                (screenW - 300) / 2,
-                _centerPanel.Bottom - btnH - 100,
-                300,
-                40);
-
+            // Start Button
+            // Start Button
+            // Cards end at (startY + cardH) = (_centerPanel.Y + 80 + 220) = _centerPanel.Y + 300
+            // Panel ends at _centerPanel.Y + 400.
+            // So we have 100px space. Button is 50px.
+            // Let's move Start Button to Y + 310
+            
             _startBtn = new Rectangle(
                 (screenW - btnW) / 2,
-                _centerPanel.Bottom - btnH - 30,
+                _centerPanel.Y + 310,
+                btnW,
+                btnH);
+            
+            // Leaderboard Button
+            _leaderboardBtn = new Rectangle(
+                (screenW - btnW) / 2,
+                _startBtn.Bottom + 10,
                 btnW,
                 btnH);
         }
 
+        // Removed OnTextInput as username is passed from LoginScene/Game1
+        /*
         private void OnTextInput(object sender, TextInputEventArgs e)
-        {
-            if (!_isTyping || _waitingForGame) return;
-
-            if (e.Key == Keys.Back)
-            {
-                if (_usernameInput.Length > 0)
-                    _usernameInput = _usernameInput.Substring(0, _usernameInput.Length - 1);
-            }
-            else if (e.Key == Keys.Enter)
-            {
-               // Enter handled in Update
-            }
-            else
-            {
-                // Simple filter (letters, numbers, space)
-                if (_font.Characters.Contains(e.Character))
-                {
-                    if (_usernameInput.Length < 12) // Max length
-                        _usernameInput += e.Character;
-                }
-            }
-        }
+        { ... } 
+        */
 
         public override void Update(GameTime gameTime)
         {
@@ -146,13 +137,15 @@ namespace Bomberman.UI.Scenes
 
                 if (_startBtn.Contains(p))
                 {
-                    if (string.IsNullOrWhiteSpace(_usernameInput)) return; // Prevent empty join
-
                     // Send theme if first player, otherwise send null
                     string? themeToSend = _canSelectTheme ? _selectedTheme.ToString() : null;
-                    Game.JoinLobby(_usernameInput, themeToSend);
+                    Game.JoinLobby(null, themeToSend); // Null username means use existing in Game1
                     _waitingForGame = true;
-                    Game.Window.TextInput -= OnTextInput; // Unsubscribe
+                }
+                
+                if (_leaderboardBtn.Contains(p))
+                {
+                    SceneManager.ChangeScene(new LeaderboardScene(Game));
                 }
             }
 
@@ -162,7 +155,7 @@ namespace Bomberman.UI.Scenes
                 string? themeToSend = _canSelectTheme ? _selectedTheme.ToString() : null;
                 Game.JoinLobby(_usernameInput, themeToSend);
                 _waitingForGame = true;
-                Game.Window.TextInput -= OnTextInput;
+                // Game.Window.TextInput -= OnTextInput;
             }
             if (kb.IsKeyDown(Keys.Escape))
             {
@@ -253,8 +246,8 @@ namespace Bomberman.UI.Scenes
             }
             else
             {
-                DrawInputBox();
-                DrawButton(_startBtn, "JOIN GAME", startHover);
+                DrawButton(_startBtn, "JOIN MATCH", startHover);
+                DrawButton(_leaderboardBtn, "LEADERBOARD", _leaderboardBtn.Contains(mousePos));
             }
 
             SpriteBatch.End();
@@ -320,26 +313,6 @@ namespace Bomberman.UI.Scenes
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.X, r.Y, thickness, r.Height), color);
             SpriteBatch.Draw(Game.Pixel, new Rectangle(r.Right - thickness, r.Y, thickness, r.Height), color);
-        }
-        private void DrawInputBox()
-        {
-            SpriteBatch.Draw(Game.Pixel, _inputRect, new Color(50, 50, 50));
-            DrawBorder(_inputRect, 1, Color.Gray);
-
-            string text = _usernameInput;
-            if (_isTyping && (int)(_hoverTimer * 2) % 2 == 0) text += "|"; // Cursor blink
-
-            if (string.IsNullOrEmpty(_usernameInput) && !_isTyping)
-            {
-                text = "Enter Username..."; 
-            }
-
-            Vector2 size = _font.MeasureString(text);
-            Vector2 pos = new Vector2(
-                _inputRect.X + 10,
-                _inputRect.Center.Y - size.Y / 2);
-            
-            SpriteBatch.DrawString(_font, text, pos, Color.White);
         }
     }
 }

@@ -206,6 +206,52 @@ namespace Bomberman.Services.Network
             await Clients.All.SendAsync("ReceivePowerUpCollection", powerUp);
         }
 
+        public async Task<bool> Login(string username, string password)
+        {
+            Console.WriteLine($"[AUTH] Login Attempt: {username}");
+            var user = await _userRepository.GetByUsernameAsync(username);
+            
+            if (user == null) 
+            {
+                Console.WriteLine($"[AUTH] Login Failed: User {username} not found.");
+                return false;
+            }
+            
+            // Simple check
+            bool success = user.PasswordHash == password;
+            Console.WriteLine($"[AUTH] Login {(success ? "Success" : "Failed (Bad Pass)")}: {username}");
+            return success;
+        }
+
+        public async Task<bool> Register(string username, string password)
+        {
+             Console.WriteLine($"[AUTH] Register Attempt: {username}");
+             // Check if exists
+             var existing = await _userRepository.GetByUsernameAsync(username);
+             if (existing != null) 
+             {
+                 Console.WriteLine($"[AUTH] Register Failed: {username} already exists.");
+                 return false;
+             }
+
+             var newUser = new Bomberman.Services.Data.User 
+             { 
+                 Username = username, 
+                 PasswordHash = password, // Ideally hash this!
+                 CreatedAt = DateTime.UtcNow 
+             };
+             
+             bool result = await _userRepository.AddUserAsync(newUser);
+             Console.WriteLine($"[AUTH] Register Result for {username}: {result}");
+             return result;
+        }
+
+        public async Task<List<Bomberman.Services.Data.User>> GetLeaderboard()
+        {
+            var users = await _userRepository.GetTopPlayersAsync(10);
+            return users.ToList();
+        }
+
         public async Task RequestGameNavigation(GameNavigationDTO navigation)
         {
             Console.WriteLine($"[SERVER] Game Navigation Request: {navigation.Action} by {navigation.RequestedBy}");

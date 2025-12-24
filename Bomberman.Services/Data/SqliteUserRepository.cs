@@ -31,6 +31,7 @@ namespace Bomberman.Services.Data
                     Wins INTEGER DEFAULT 0,
                     Losses INTEGER DEFAULT 0,
                     TotalGames INTEGER DEFAULT 0,
+                    Kills INTEGER DEFAULT 0,
                     PreferredTheme TEXT DEFAULT 'Forest',
                     CreatedAt TEXT
                 );
@@ -58,8 +59,9 @@ namespace Bomberman.Services.Data
                     Wins = reader.GetInt32(3),
                     Losses = reader.GetInt32(4),
                     TotalGames = reader.GetInt32(5),
-                    PreferredTheme = reader.IsDBNull(6) ? "Forest" : reader.GetString(6),
-                    CreatedAt = DateTime.Parse(reader.GetString(7))
+                    Kills = reader.GetInt32(6),
+                    PreferredTheme = reader.IsDBNull(7) ? "Forest" : reader.GetString(7),
+                    CreatedAt = DateTime.Parse(reader.GetString(8))
                 };
             }
             return null;
@@ -74,14 +76,15 @@ namespace Bomberman.Services.Data
 
                 var command = connection.CreateCommand();
                 command.CommandText = @"
-                    INSERT INTO Users (Username, PasswordHash, Wins, Losses, TotalGames, PreferredTheme, CreatedAt)
-                    VALUES (@username, @passwordHash, @wins, @losses, @totalGames, @preferredTheme, @createdAt)
+                    INSERT INTO Users (Username, PasswordHash, Wins, Losses, TotalGames, Kills, PreferredTheme, CreatedAt)
+                    VALUES (@username, @passwordHash, @wins, @losses, @totalGames, @kills, @preferredTheme, @createdAt)
                 ";
                 command.Parameters.AddWithValue("@username", user.Username);
                 command.Parameters.AddWithValue("@passwordHash", user.PasswordHash);
                 command.Parameters.AddWithValue("@wins", user.Wins);
                 command.Parameters.AddWithValue("@losses", user.Losses);
                 command.Parameters.AddWithValue("@totalGames", user.TotalGames);
+                command.Parameters.AddWithValue("@kills", user.Kills);
                 command.Parameters.AddWithValue("@preferredTheme", user.PreferredTheme);
                 command.Parameters.AddWithValue("@createdAt", user.CreatedAt.ToString("o"));
 
@@ -134,11 +137,26 @@ namespace Bomberman.Services.Data
                     Wins = reader.GetInt32(3),
                     Losses = reader.GetInt32(4),
                     TotalGames = reader.GetInt32(5),
-                    PreferredTheme = reader.IsDBNull(6) ? "Forest" : reader.GetString(6),
-                    CreatedAt = DateTime.Parse(reader.GetString(7))
+                    Kills = reader.GetInt32(6),
+                    PreferredTheme = reader.IsDBNull(7) ? "Forest" : reader.GetString(7),
+                    CreatedAt = DateTime.Parse(reader.GetString(8))
                 });
             }
             return users;
+        }
+
+        public async Task<bool> UpdateKillsAsync(string username, int killCount)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "UPDATE Users SET Kills = Kills + @killCount WHERE Username = @username";
+            command.Parameters.AddWithValue("@username", username);
+            command.Parameters.AddWithValue("@killCount", killCount);
+
+            int rowsAffected = await command.ExecuteNonQueryAsync();
+            return rowsAffected > 0;
         }
 
         public async Task<bool> UpdatePreferencesAsync(string username, string theme)

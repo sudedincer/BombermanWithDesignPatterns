@@ -10,6 +10,7 @@ public class User
     public int Wins { get; set; }
     public int Losses { get; set; }
     public int TotalGames { get; set; }
+    public int Kills { get; set; }  // Enemy kills
     
     // Preferences
     public string PreferredTheme { get; set; } = "Forest";

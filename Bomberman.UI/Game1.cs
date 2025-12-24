@@ -47,14 +47,25 @@ namespace Bomberman.UI
              SceneManager.ChangeScene(new GameScene(this, theme, null, 1, _username));
         }
 
-        public async void JoinLobby(string username, string? theme = null)
+        public async void JoinLobby(string? username, string? theme = null)
         {
-             _username = username;
-             // If empty, generate random fallback (though UI should prevent this)
+             // Only update if a new username is provided
+             if (!string.IsNullOrWhiteSpace(username))
+             {
+                 _username = username;
+             }
+             
+             // Fallback: If still empty (shouldn't happen after auth), generate random
              if (string.IsNullOrWhiteSpace(_username))
                 _username = "Player" + new System.Random().Next(100, 999);
                 
              await _gameClient.JoinLobbyAsync(_username, theme);
+        }
+
+        public void JoinLobbyWithAuth(string username)
+        {
+            _username = username;
+            SceneManager.ChangeScene(new LobbyScene(this));
         }
 
         protected override void Initialize()
@@ -121,8 +132,8 @@ namespace Bomberman.UI
             var t4 = Content.Load<Texture2D>("Textures/desert_breakable");
             _gameView.SetWallTextures(t1, t2, t3, t4);
 
-            // Başlangıç sahnesi: Lobby
-            SceneManager.ChangeScene(new LobbyScene(this));
+            // Başlangıç sahnesi: Login
+            SceneManager.ChangeScene(new LoginScene(this));
         }
 
         protected override void Update(GameTime gameTime)
