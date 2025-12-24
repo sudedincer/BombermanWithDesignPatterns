@@ -351,33 +351,6 @@ The game uses SignalR for real-time communication:
 
 ---
 
-## 📝 Assignment Requirements
-
-✅ **All requirements met:**
-
-- [x] Minimum 4 design patterns (9 implemented)
-- [x] At least 2 behavioral patterns (3 implemented)
-- [x] At least 2 creational patterns (3 implemented)
-- [x] At least 2 structural patterns (2 implemented)
-- [x] Multiplayer functionality
-- [x] Multiple map themes
-- [x] Hard walls (2-hit destruction)
-- [x] Database integration
-- [x] User authentication
-- [x] Comprehensive design document
-
-**Bonus Features Implemented:**
-- +5 Professional UI/UX design
-- +5 Additional design patterns
-
----
-
-## 📄 License
-
-This project was created as an assignment for the Object-Oriented Design Patterns course.
-
----
-
 ## 🙏 Acknowledgments
 
 - **MonoGame** - Cross-platform game framework
