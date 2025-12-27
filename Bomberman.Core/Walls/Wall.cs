@@ -1,5 +1,5 @@
 using Bomberman.Core.Patterns.Behavioral.Observer;
-// Wall.cs, UnbreakableWall.cs, HardWall.cs tek bir dosyada gösterilmiştir:
+using Bomberman.Core.Enums;
 
 namespace Bomberman.Core.Walls
 {
@@ -8,6 +8,14 @@ namespace Bomberman.Core.Walls
     {
         public bool IsDestroyed { get; set; } = false;
         public abstract bool CanBeDestroyed();
+        
+        /// <summary>
+        /// Returns visual theme identifier for this wall.
+        /// UI layer uses this to select appropriate texture.
+        /// Core layer stays UI-independent by using enum instead of paths.
+        /// </summary>
+        public virtual WallVisualTheme GetVisualTheme() 
+            => WallVisualTheme.Generic;
     }
 
    

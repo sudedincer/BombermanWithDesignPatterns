@@ -9,15 +9,20 @@ namespace Bomberman.Core.Patterns.Creational
     {
         public Wall CreateWall(WallType type, int x, int y, GameMap map)
         {
-            // Şehir teması (Beton/Tuğla)
+            // ✅ GERÇEK ABSTRACT FACTORY - City tema-specific sınıflar
             switch (type)
             {
                 case WallType.Unbreakable:
-                    return new UnbreakableWall(); // Beton blok
+                    return new UnbreakableWall(); // Beton blok (tema-independent)
+                    
                 case WallType.Breakable:
-                    return new BreakableWall(x, y,map); // Tuğla duvar
+                    // ✅ City-specific breakable wall (Tuğla Duvar)
+                    return new CityBreakableWall(x, y, map);
+                    
                 case WallType.Hard:
-                    return new HardWall(x, y); // Çelik/Güçlendirilmiş beton
+                    // ✅ City-specific hard wall (Çelik Duvar)
+                    return new CityHardWall(x, y);
+                    
                 default:
                     throw new ArgumentException($"Invalid wall type for City Factory.");
             }

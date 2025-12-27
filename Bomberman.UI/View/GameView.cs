@@ -184,33 +184,48 @@ namespace Bomberman.UI.View
         }
         private (Texture2D tex, Rectangle src) GetWallSprite(Wall wall)
         {
-            // 1. Try Split Textures
+            // ✅ HYBRID ABSTRACT FACTORY - Wall knows its own theme!
+            var visualTheme = wall.GetVisualTheme();
+            
+            // Handle HardWall damage state
+            bool isDamaged = false;
+            if (wall is HardWall hw)
+            {
+                isDamaged = hw.HitsRemaining < 2;
+            }
+            
+            // Try Split Textures (theme-based)
             if (_wallUnbreakable != null)
             {
-                if (wall is UnbreakableWall) return (_wallUnbreakable, _wallUnbreakable.Bounds);
-                if (wall is HardWall hw)
+                // Map visual theme enum to texture
+                Texture2D texture = visualTheme switch
                 {
-                    if (hw.HitsRemaining >= 2) return (_wallHard, _wallHard.Bounds);
-                    return (_wallHardDamaged, _wallHardDamaged.Bounds);
-                }
-                if (wall is BreakableWall) return (_wallBreakable, _wallBreakable.Bounds);
-                return (_wallUnbreakable, _wallUnbreakable.Bounds);
+                    Bomberman.Core.Enums.WallVisualTheme.DesertBreakable => _wallBreakable,
+                    Bomberman.Core.Enums.WallVisualTheme.DesertHard => isDamaged ? _wallHardDamaged : _wallHard,
+                    Bomberman.Core.Enums.WallVisualTheme.CityBreakable => _wallBreakable,
+                    Bomberman.Core.Enums.WallVisualTheme.CityHard => isDamaged ? _wallHardDamaged : _wallHard,
+                    Bomberman.Core.Enums.WallVisualTheme.ForestBreakable => _wallBreakable,
+                    Bomberman.Core.Enums.WallVisualTheme.ForestHard => isDamaged ? _wallHardDamaged : _wallHard,
+                    _ => _wallUnbreakable  // Generic/Unbreakable
+                };
+                
+                return (texture, texture.Bounds);
             }
 
-            // 2. Try Legacy Atlas
+            // Try Legacy Atlas
             if (_legacyAtlas != null)
             {
                  if (wall is UnbreakableWall) return (_legacyAtlas, _legacyAtlasRects[0, 0]);
-                 if (wall is HardWall hw)
+                 if (wall is HardWall hardWall)
                  {
-                     if (hw.HitsRemaining >= 2) return (_legacyAtlas, _legacyAtlasRects[1, 0]);
+                     if (hardWall.HitsRemaining >= 2) return (_legacyAtlas, _legacyAtlasRects[1, 0]);
                      return (_legacyAtlas, _legacyAtlasRects[0, 1]);
                  }
                  if (wall is BreakableWall) return (_legacyAtlas, _legacyAtlasRects[1, 1]);
                  return (_legacyAtlas, _legacyAtlasRects[0, 0]);
             }
 
-            // 3. Fallback
+            // Fallback
              if (_textureCache.ContainsKey("Unbreakable"))
                 return (_textureCache["Unbreakable"], new Rectangle(0,0,_tileSize,_tileSize));
              return (_pixel, new Rectangle(0,0,1,1));

@@ -6,22 +6,22 @@ namespace Bomberman.Core.Patterns.Creational
 {
     public class DesertWallFactory : IWallFactory
     {
-        // Gelen x ve y parametrelerini kullanıyoruz
         public Wall CreateWall(WallType type, int x, int y, GameMap map)
         {
+            // ✅ GERÇEK ABSTRACT FACTORY - Tema-specific sınıflar döndürüyor!
             switch (type)
             {
                 case WallType.Unbreakable:
-                    // UnbreakableWall'un constructor'ı parametre almadığı için bu doğru.
+                    // Unbreakable wall tema-independent (hepsi aynı)
                     return new UnbreakableWall();
                 
                 case WallType.Breakable:
-                    // BreakableWall'a konum parametrelerini iletiyoruz
-                    return new BreakableWall(x, y,map); 
+                    // ✅ Desert-specific breakable wall (Kumtaşı)
+                    return new DesertBreakableWall(x, y, map); 
                 
                 case WallType.Hard:
-                    // HardWall'a konum parametrelerini iletiyoruz
-                    return new HardWall(x, y);
+                    // ✅ Desert-specific hard wall (Sertleştirilmiş Kil)
+                    return new DesertHardWall(x, y);
                 
                 default:
                     throw new ArgumentException($"Invalid wall type: {type}");

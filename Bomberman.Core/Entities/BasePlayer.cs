@@ -13,6 +13,7 @@ public class BasePlayer : IPlayer,IExplosionObserver
     public IPlayerState CurrentState { get; private set; }
 
     // Backward compatibility property
+    // eski kodun çalışmaya devam etmesi için ekstra kontrol
     public bool IsAlive 
     { 
         get => CurrentState is AlivePlayerState; 

@@ -9,15 +9,20 @@ namespace Bomberman.Core.Patterns.Creational
     {
         public Wall CreateWall(WallType type, int x, int y, GameMap map)
         {
-            // Orman teması için farklı duvar tipleri (görsel olarak) döndürebilirsiniz.
+            // ✅ GERÇEK ABSTRACT FACTORY - Forest tema-specific sınıflar
             switch (type)
             {
                 case WallType.Unbreakable:
-                    return new UnbreakableWall(); // Ağaç gövdesi gibi
+                    return new UnbreakableWall(); // Ağaç gövdesi (tema-independent)
+                    
                 case WallType.Breakable:
-                    return new BreakableWall(x, y, map); // Yaprak/Çalı gibi
+                    // ✅ Forest-specific breakable wall (Ahşap Sandık)
+                    return new ForestBreakableWall(x, y, map);
+                    
                 case WallType.Hard:
-                    return new HardWall(x, y); // Kalın kütük
+                    // ✅ Forest-specific hard wall (Kalın Kütük)
+                    return new ForestHardWall(x, y);
+                    
                 default:
                     throw new ArgumentException($"Invalid wall type for Forest Factory.");
             }
