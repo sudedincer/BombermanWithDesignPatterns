@@ -59,7 +59,7 @@ This project implements **9 design patterns**, exceeding the requirement:
 3. **State Pattern** - Player state management
 
 ### Creational Patterns (3)
-4. **Abstract Factory** - Theme-specific asset creation
+4. **Abstract Factory (Hybrid)** - Theme-specific wall creation with self-aware visual identity
 5. **Builder Pattern** - Complex map construction
 6. **Factory Method** - Wall type instantiation
 

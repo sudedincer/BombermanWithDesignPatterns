@@ -398,11 +398,13 @@ public class BasePlayer
 
 ### 3.2 Creational Patterns
 
-#### 3.2.1 Abstract Factory Pattern ⭐
+#### 3.2.1 Abstract Factory Pattern ⭐ (Hybrid Implementation)
 
-**Intent:** Create theme-specific walls (City, Desert, Forest).
+**Intent:** Create theme-specific walls (City, Desert, Forest) with self-aware visual identity.
 
-**Problem:** Each theme needs different wall appearances, but same types (Unbreakable, Breakable, Hard).
+**Problem:** Each theme needs different wall appearances and potentially different behaviors, but same types (Unbreakable, Breakable, Hard).
+
+**Solution:** Hybrid Abstract Factory - Each factory creates theme-specific subclasses, and each wall knows its own visual theme via enum.
 
 **UML Diagram:**
 
@@ -427,24 +429,112 @@ classDiagram
     
     class Wall {
         <<abstract>>
+        +GetVisualTheme() WallVisualTheme
+    }
+    
+    class DesertBreakableWall {
+        +GetVisualTheme() WallVisualTheme
+    }
+    
+    class CityBreakableWall {
+        +GetVisualTheme() WallVisualTheme
+    }
+    
+    class WallVisualTheme {
+        <<enumeration>>
+        Generic
+        DesertBreakable
+        DesertHard
+        CityBreakable
+        CityHard
+        ForestBreakable
+        ForestHard
     }
     
     IWallFactory <|.. CityWallFactory
     IWallFactory <|.. DesertWallFactory
     IWallFactory <|.. ForestWallFactory
-    CityWallFactory ..> Wall
+    CityWallFactory ..> CityBreakableWall : creates
+    DesertWallFactory ..> DesertBreakableWall : creates
+    Wall <|-- DesertBreakableWall
+    Wall <|-- CityBreakableWall
+    Wall --> WallVisualTheme : uses
 ```
 
 **Actual Implementation:**
 
 ```csharp
+// Visual Theme Enum (Core layer stays UI-independent)
+public enum WallVisualTheme
+{
+    Generic,           // Fallback/Unbreakable walls
+    DesertBreakable,   // Kumtaşı
+    DesertHard,        // Sertleştirilmiş Kil
+    CityBreakable,     // Tuğla Duvar
+    CityHard,          // Çelik Duvar
+    ForestBreakable,   // Ahşap Sandık
+    ForestHard         // Kalın Kütük
+}
+
+// Abstract Product with visual identity
+public abstract class Wall
+{
+    public bool IsDestroyed { get; set; } = false;
+    public abstract bool CanBeDestroyed();
+    
+    // ✅ HYBRID: Wall knows its own visual theme
+    public virtual WallVisualTheme GetVisualTheme() 
+        => WallVisualTheme.Generic;
+}
+
+// Theme-Specific Products
+public class DesertBreakableWall : BreakableWall
+{
+    public override WallVisualTheme GetVisualTheme() 
+        => WallVisualTheme.DesertBreakable;
+    
+    // Future: Theme-specific behaviors can be added here
+}
+
+public class CityBreakableWall : BreakableWall
+{
+    public override WallVisualTheme GetVisualTheme() 
+        => WallVisualTheme.CityBreakable;
+}
+
+public class ForestBreakableWall : BreakableWall
+{
+    public override WallVisualTheme GetVisualTheme() 
+        => WallVisualTheme.ForestBreakable;
+}
+
 // Abstract Factory Interface
 public interface IWallFactory
 {
     Wall CreateWall(WallType type, int x, int y, GameMap map);
 }
 
-// Concrete Factory 1: City
+// Concrete Factory 1: Desert
+public class DesertWallFactory : IWallFactory
+{
+    public Wall CreateWall(WallType type, int x, int y, GameMap map)
+    {
+        // ✅ Returns theme-specific wall classes!
+        switch (type)
+        {
+            case WallType.Unbreakable:
+                return new UnbreakableWall(); // Theme-independent
+            case WallType.Breakable:
+                return new DesertBreakableWall(x, y, map); // ✅ Desert-specific
+            case WallType.Hard:
+                return new DesertHardWall(x, y); // ✅ Desert-specific
+            default:
+                throw new ArgumentException("Invalid wall type");
+        }
+    }
+}
+
+// Concrete Factory 2: City
 public class CityWallFactory : IWallFactory
 {
     public Wall CreateWall(WallType type, int x, int y, GameMap map)
@@ -452,57 +542,47 @@ public class CityWallFactory : IWallFactory
         switch (type)
         {
             case WallType.Unbreakable:
-                return new UnbreakableWall(); // Concrete blocks
+                return new UnbreakableWall();
             case WallType.Breakable:
-                return new BreakableWall(x, y, map); // Brick walls
+                return new CityBreakableWall(x, y, map); // ✅ City-specific
             case WallType.Hard:
-                return new HardWall(x, y); // Steel-reinforced
+                return new CityHardWall(x, y); // ✅ City-specific
             default:
                 throw new ArgumentException("Invalid wall type");
         }
     }
 }
 
-// Concrete Factory 2: Desert
-public class DesertWallFactory : IWallFactory
+// UI Layer: Uses visual theme
+// GameView.cs
+private (Texture2D tex, Rectangle src) GetWallSprite(Wall wall)
 {
-    public Wall CreateWall(WallType type, int x, int y, GameMap map)
+    // ✅ HYBRID: Ask wall for its visual theme
+    var visualTheme = wall.GetVisualTheme();
+    
+    // Map enum to texture (UI layer responsibility)
+    Texture2D texture = visualTheme switch
     {
-        switch (type)
-        {
-            case WallType.Unbreakable:
-                return new UnbreakableWall(); // Stone blocks
-            case WallType.Breakable:
-                return new BreakableWall(x, y, map); // Sandstone
-            case WallType.Hard:
-                return new HardWall(x, y); // Fortified clay
-            default:
-                throw new ArgumentException("Invalid wall type");
-        }
-    }
-}
-
-// Concrete Factory 3: Forest
-public class ForestWallFactory : IWallFactory
-{
-    public Wall CreateWall(WallType type, int x, int y, GameMap map)
-    {
-        switch (type)
-        {
-            case WallType.Unbreakable:
-                return new UnbreakableWall(); // Tree trunks
-            case WallType.Breakable:
-                return new BreakableWall(x, y, map); // Wooden crates
-            case WallType.Hard:
-                return new HardWall(x, y); // Stone logs
-            default:
-                throw new ArgumentException("Invalid wall type");
-        }
-    }
+        WallVisualTheme.DesertBreakable => _desertBreakableTexture,
+        WallVisualTheme.CityBreakable => _cityBreakableTexture,
+        WallVisualTheme.ForestBreakable => _forestBreakableTexture,
+        _ => _fallbackTexture
+    };
+    
+    return (texture, texture.Bounds);
 }
 ```
 
-**Location:** `Bomberman.Core/Patterns/Creational/`
+**Benefits of Hybrid Approach:**
+1. ✅ **Encapsulation:** Each wall knows its own visual identity
+2. ✅ **Core UI-Independent:** Uses enum instead of texture paths
+3. ✅ **Extensibility:** Easy to add new themes (just new wall classes + factory)
+4. ✅ **Future-Ready:** Can add theme-specific behaviors to wall subclasses
+
+**Location:** 
+- `Bomberman.Core/Patterns/Creational/AbstractFactory/` (Factories)
+- `Bomberman.Core/Walls/` (Theme-specific wall classes)
+- `Bomberman.Core/Enums/WallVisualTheme.cs` (Visual theme enum)
 
 ---
 

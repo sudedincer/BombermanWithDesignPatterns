@@ -198,7 +198,7 @@ namespace Bomberman.UI.View
             if (_wallUnbreakable != null)
             {
                 // Map visual theme enum to texture
-                Texture2D texture = visualTheme switch
+                Texture2D? texture = visualTheme switch
                 {
                     Bomberman.Core.Enums.WallVisualTheme.DesertBreakable => _wallBreakable,
                     Bomberman.Core.Enums.WallVisualTheme.DesertHard => isDamaged ? _wallHardDamaged : _wallHard,
@@ -209,7 +209,11 @@ namespace Bomberman.UI.View
                     _ => _wallUnbreakable  // Generic/Unbreakable
                 };
                 
-                return (texture, texture.Bounds);
+                // ✅ NULL CHECK - Crash fix!
+                if (texture != null)
+                {
+                    return (texture, texture.Bounds);
+                }
             }
 
             // Try Legacy Atlas

@@ -589,6 +589,7 @@ namespace Bomberman.UI.Scenes
             {
                 if (!p.Collected && p.X == px && p.Y == py)
                 {
+                    //decorator uygulaması
                     _player = p.Apply(_player);
                     p.Collected = true;
 

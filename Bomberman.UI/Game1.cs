@@ -70,6 +70,7 @@ namespace Bomberman.UI
 
         protected override void Initialize()
         {
+            //adapter oluşturulur
             _gameClient = new GameClient(HUB_URL);
             
             // Listen for Game Start
@@ -85,10 +86,10 @@ namespace Bomberman.UI
                  ThemeType theme = ThemeType.City;
                  if (startDto.Theme == "Desert") theme = ThemeType.Desert;
                  if (startDto.Theme == "Forest") theme = ThemeType.Forest;
-
+                 //oyun başlıyor
                  SceneManager.ChangeScene(new GameScene(this, theme, startDto.Seed, startDto.PlayerIndex, _username));
             };
-
+            //connection başlatılıyor
             _ = _gameClient.StartConnectionAsync();
 
             base.Initialize();

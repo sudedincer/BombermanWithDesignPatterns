@@ -9,6 +9,7 @@ namespace Bomberman.Services.Network
     // Bu sınıf, UI katmanının Network ile iletişim kurmasını sağlar.
     public class GameClient
     {
+        //adaptee private
         private readonly HubConnection _connection;
         
         // 1. Olay Tanımlama: Sunucudan bir güncelleme geldiğinde UI/Model'i bilgilendirmek için Event kullanıyoruz.
@@ -34,6 +35,7 @@ namespace Bomberman.Services.Network
 
         public GameClient(string hubUrl)
         {
+            //signalR connection oluştur(adaptee)
             _connection = new HubConnectionBuilder()
                 .WithUrl(hubUrl) 
                 .Build();
