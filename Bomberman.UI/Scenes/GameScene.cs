@@ -7,11 +7,9 @@ using Bomberman.Core.Enums;
 using Bomberman.Core.GameLogic;
 using Bomberman.Core.Patterns.Creational;
 using Bomberman.Core.Patterns.Creational.Builder;
-using Bomberman.Core.Patterns.Structural.Adapter;
-using Bomberman.UI.Patterns.Structural.Adapter;
+using Bomberman.Services.Patterns.Structural.Adapter;
 using Bomberman.Core.PowerUps;
 using Bomberman.Core.Walls;
-using Bomberman.Services.Network;
 using Bomberman.UI.Controller;
 using Bomberman.UI.View;
 using Microsoft.Xna.Framework;
@@ -413,11 +411,10 @@ namespace Bomberman.UI.Scenes
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             // ============================
-            // OYUNCU HAREKETİ (ADAPTER PATTERN)
+            // OYUNCU HAREKETİ (INPUT CONTROL)
             // ============================
-            // Dependency Injection ideali, ama şimdilik burada oluşturuyoruz.
-            IInputService inputService = new KeyboardInputAdapter();
-            var (deltaX, deltaY, _) = inputService.GetInput();
+            // Direct keyboard input using InputController
+            var (deltaX, deltaY, _) = InputController.GetCurrentInput();
 
             if (deltaX != 0 || deltaY != 0)
             {

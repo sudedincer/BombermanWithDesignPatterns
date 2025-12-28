@@ -1,5 +1,5 @@
 using System;
-using Bomberman.Services.Network;
+using Bomberman.Services.Patterns.Structural.Adapter;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Microsoft.Xna.Framework.Graphics;

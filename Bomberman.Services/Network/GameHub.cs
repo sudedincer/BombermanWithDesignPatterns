@@ -65,14 +65,16 @@ namespace Bomberman.Services.Network
                 }
                 playerCount = _connectedConnectionIds.Count;
                 
-                // If this is the first player and they provided a theme, store it
-                if (playerCount == 1)
+                // Determine if this user is the host (first in the list)
+                if (_connectedConnectionIds.Count > 0 && _connectedConnectionIds[0] == Context.ConnectionId)
                 {
                     isFirstPlayer = true;
+                    
+                    // Allow host to update theme regardless of whether they are new or existing
                     if (!string.IsNullOrEmpty(theme))
                     {
                         _selectedTheme = theme;
-                        Console.WriteLine($"[SERVER] First player selected theme: {theme}");
+                        Console.WriteLine($"[SERVER] Host selected/updated theme: {theme}");
                     }
                 }
                 

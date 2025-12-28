@@ -1,6 +1,8 @@
+using Bomberman.Core.Patterns.Behavioral.Observer;
+
 namespace Bomberman.Core.Walls
 {
-    public class HardWall : Wall
+    public class HardWall : Wall,IExplosionObserver
     {
         public int X { get; }
         public int Y { get; }

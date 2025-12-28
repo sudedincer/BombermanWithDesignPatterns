@@ -1,5 +1,5 @@
 ﻿using Bomberman.Core.Enums;
-using Bomberman.Services.Network;
+using Bomberman.Services.Patterns.Structural.Adapter;
 using Bomberman.UI.Scenes;
 using Bomberman.UI.View;
 using Microsoft.Xna.Framework;
@@ -21,7 +21,7 @@ namespace Bomberman.UI
         public SpriteBatch SpriteBatch => _spriteBatch;
         public Texture2D Pixel { get; private set; }
         public GameView GameView => _gameView;
-        public GameClient GameClient => _gameClient;
+        public IGameClient GameClient => _gameClient;
         public int MapWidth => _mapWidth;
         public int MapHeight => _mapHeight;
 
